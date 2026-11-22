@@ -86,8 +86,13 @@ jobs:
           $motor = Join-Path $env:RUNNER_TEMP "motor-vacio"
           $out = Join-Path $env:RUNNER_TEMP "selftest.txt"
           New-Item -ItemType Directory -Force $motor | Out-Null
-          $p = Start-Process -FilePath ".\dist\LiveVault.exe" -ArgumentList @("--selftest", $motor, $out) `
-                             -Wait -PassThru
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = (Resolve-Path "dist\LiveVault.exe").Path
+          $psi.Arguments = "--selftest `"$motor`" `"$out`""
+          $psi.UseShellExecute = $false
+          $psi.WorkingDirectory = (Resolve-Path "dist").Path
+          $p = [System.Diagnostics.Process]::Start($psi)
+          if (-not $p.WaitForExit(180000)) { $p.Kill(); throw "El selftest no termino en 3 minutos" }
           if (Test-Path $out) { Get-Content $out }
           if ($p.ExitCode -ne 0) { throw "El selftest del .exe devolvio $($p.ExitCode)" }
           if (-not (Select-String -Path $out -Pattern '^OK ' -Quiet)) { throw "El selftest no dijo OK" }
