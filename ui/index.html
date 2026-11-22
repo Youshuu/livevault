@@ -17,6 +17,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
 h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
 h1 span{color:var(--red)}
+.brand{width:34px;height:34px;flex:0 0 auto;border-radius:9px;box-shadow:0 2px 10px rgba(0,0,0,.35)}
 .chip{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
 .chip.ok{color:var(--green);border-color:#25523a}
 .chip.bad{color:var(--amber);border-color:#5a4720}
@@ -82,10 +83,10 @@ a.btn{color:inherit;text-decoration:none}
 /* drawer */
 .overlay{position:fixed;inset:0;background:#0009;display:none;z-index:20}
 .overlay.open{display:block}
-.drawer{position:fixed;top:0;right:0;bottom:0;width:min(760px,100%);background:var(--panel);border-left:1px solid var(--line);transform:translateX(100%);transition:.22s;z-index:21;display:flex;flex-direction:column}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(900px,100%);background:var(--panel);border-left:1px solid var(--line);transform:translateX(100%);transition:.22s;z-index:21;display:flex;flex-direction:column}
 .drawer.open{transform:none}
 .drawer header{position:static}
-.drawer .body{padding:16px 20px;overflow:auto;flex:1}
+.drawer .body{padding:16px 16px;overflow:auto;flex:1}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px;padding:8px 6px;border-bottom:1px solid var(--line)}
 td{padding:10px 6px;border-bottom:1px solid #20242d;vertical-align:middle;font-variant-numeric:tabular-nums}
@@ -129,8 +130,24 @@ pre{background:#0b0d11;border:1px solid var(--line);border-radius:10px;padding:1
 </head>
 <body>
 <header>
+  <svg class="brand" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="lvBg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1f2637"/><stop offset="1" stop-color="#0a0d13"/>
+      </linearGradient>
+      <linearGradient id="lvRing" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ff8a3d"/><stop offset="1" stop-color="#ff4d5e"/>
+      </linearGradient>
+    </defs>
+    <rect width="1024" height="1024" rx="230" fill="url(#lvBg)"/>
+    <circle cx="512" cy="512" r="253" fill="none" stroke="url(#lvRing)" stroke-width="66"
+            stroke-dasharray="1451 139" stroke-dashoffset="-110"/>
+    <circle cx="669" cy="376" r="54" fill="#ff4d5e"/>
+    <path d="M697 405 L863 512 L697 619 Z" fill="#ffffff" stroke="#ffffff"
+          stroke-width="19" stroke-linejoin="round"/>
+  </svg>
   <h1>Live<span>Vault</span></h1>
-  <span id="chipVer" class="chip" title="Versión de LiveVault">LiveVault</span>
+  <span id="chipVer" class="chip" title="Versión de LiveVault">v1.8.1</span>
   <span id="chipEngine" class="chip">motor…</span>
   <span id="chipFfmpeg" class="chip">ffmpeg…</span>
   <span id="chipDisk" class="chip" style="display:none">disco…</span>
@@ -447,7 +464,7 @@ async function poll() {
   try {
     const data = await api('/api/state');
     state = data;
-    if (data.app_version) $('#chipVer').textContent = 'LiveVault v' + data.app_version;
+    if (data.app_version) $('#chipVer').textContent = 'v' + data.app_version;
     const sig = JSON.stringify(data);
     if (sig !== lastSig) { lastSig = sig; render(); }
     if (openUser && (data.jobs > 0 || (state.users.find(u => u.username === openUser) || {}).status === 'recording')) loadRecs();

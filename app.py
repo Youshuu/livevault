@@ -52,7 +52,7 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.8.1"
 FROZEN = bool(getattr(sys, "frozen", False))
 WIN = os.name == "nt"
 NO_WINDOW = 0x08000000 if WIN else 0
@@ -3429,16 +3429,44 @@ ICON_COLORS = {"idle": (139, 147, 167), "live": (255, 159, 26), "recording": (25
 
 
 def make_icon_image(state: str = "idle", size: int = 64):
+    """Icono de la bandeja del sistema: mismo dibujo que tools/brand.py (anillo + triangulo).
+
+    El color del anillo es el estado: gris vigilando, naranja en vivo, rojo grabando.
+    Sin el punto de "en vivo": a 16-24 px no se distingue y el color ya informa.
+    """
     from PIL import Image, ImageDraw  # type: ignore
-    big = size * 4
+    big = size * 8                                  # supermuestreo: bordes limpios
+    c = big / 2
+    col = ICON_COLORS.get(state, ICON_COLORS["idle"])
+    claro = tuple(min(255, int(v + (255 - v) * 0.30)) for v in col)
+
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    col = ICON_COLORS.get(state, ICON_COLORS["idle"]) + (255,)
-    d.rounded_rectangle((0, 0, big - 1, big - 1), radius=big // 4, fill=(23, 26, 33, 255))
-    pad = big * 0.2
-    d.ellipse((pad, pad, big - pad, big - pad), outline=col, width=max(2, int(big * 0.07)))
-    c, r = big / 2, big * 0.17
-    d.ellipse((c - r, c - r, c + r, c + r), fill=col)
+    d.rounded_rectangle((0, 0, big - 1, big - 1), radius=int(big * 0.225), fill=(23, 26, 33, 255))
+
+    # anillo con degradado vertical (claro arriba)
+    anillo = Image.new("L", (big, big), 0)
+    da = ImageDraw.Draw(anillo)
+    radio, grosor = big * 0.305, big * 0.088
+    da.ellipse((c - radio, c - radio, c + radio, c + radio), fill=255)
+    da.ellipse((c - radio + grosor, c - radio + grosor,
+                c + radio - grosor, c + radio - grosor), fill=0)
+    degradado = Image.new("RGBA", (big, big))
+    for y in range(big):
+        t = y / max(1, big - 1)
+        degradado.paste(tuple(int(claro[i] + (col[i] - claro[i]) * t) for i in range(3)) + (255,),
+                        (0, y, big, y + 1))
+    img.paste(degradado, (0, 0), anillo)
+
+    # triangulo de reproduccion
+    alto = big * 0.27
+    h, w = alto / 2, alto * 0.86
+    cx, cy = c + big * 0.012, c
+    pts = [(cx - w * 0.42, cy - h), (cx + w * 0.58, cy), (cx - w * 0.42, cy + h)]
+    d = ImageDraw.Draw(img)
+    d.polygon(pts, fill=(255, 255, 255, 255))
+    d.line(pts + [pts[0]], fill=(255, 255, 255, 255), width=max(1, int(alto * 0.075)), joint="curve")
+
     return img.resize((size, size), Image.LANCZOS)
 
 
@@ -4982,8 +5010,8 @@ def make_handler(app: App):
                 "<!doctype html><meta charset='utf-8'><title>LiveVault</title>"
                 "<body style='font:16px system-ui;background:#0f1115;color:#e8eaf0;padding:40px'>"
                 "<h1>LiveVault está abierto</h1><p>Por seguridad, el panel solo se abre con su clave.</p>"
-                "<p>Abre el panel desde el <b>icono de LiveVault junto al reloj</b> "
-                "(doble clic) o desde el menú <b>Salir</b> no lo cierres.</p></body>",
+                "<p>Abre el panel con <b>doble clic en el icono de LiveVault</b> que está junto al reloj."
+                "<br>Para cerrar el programa: clic derecho en ese icono y <b>Salir</b>.</p></body>",
                 "text/html; charset=utf-8", code=403)
             return False
 

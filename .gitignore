@@ -35,6 +35,7 @@ __pycache__/
 *.png
 !icon.ico
 !ui/*.png
+!docs/**/*.png
 
 # --- Secretos y configuracion local -----------------------------------------
 .env

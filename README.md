@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo-256.png" width="116" alt="Logotipo de LiveVault">
+</p>
+
 # LiveVault
 
 **Vigila usuarios de TikTok y graba sus directos automáticamente**, varios a la vez, mientras tú
@@ -31,8 +35,27 @@ algunos antivirus avisan por defecto con programas nuevos y poco descargados:
   cada release permite verificar la descarga, y el código está aquí para leerlo y compilarlo tú.
 
 ```powershell
-Get-FileHash .\LiveVault-1.8.0.exe -Algorithm SHA256   # debe coincidir con SHA256SUMS.txt
+Get-FileHash .\LiveVault-*.exe -Algorithm SHA256   # debe coincidir con SHA256SUMS.txt
 ```
+
+---
+
+## Así se ve
+
+![Panel principal de LiveVault](docs/capturas/panel.png)
+
+*Cada usuario con su estado, sus espectadores y lo que está grabando. Con «Directos (5)» abres su
+historial y con «Pausar» dejas de vigilarlo sin borrarlo.*
+
+![Historial de directos de un usuario](docs/capturas/directos.png)
+
+*Un directo sigue siendo una sola entrada aunque se corte: los trozos se pueden unir con «Unir» sin
+recodificar (no se pierde calidad). Las favoritas ★ no se borran con la limpieza automática.*
+
+![Ajustes y avisos al móvil](docs/capturas/ajustes.png)
+
+*Avisos por ntfy, Telegram o webhook; carpetas y calidad; retención por días o tamaño; y el bot de
+Telegram, que además acepta órdenes como `/add` o `/record`.*
 
 ---
 

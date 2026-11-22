@@ -1,9 +1,18 @@
-# LiveVault 1.8.0
+# LiveVault 1.8.1
 
 Vigila usuarios de TikTok y graba sus lives automáticamente (varios a la vez).
 Vive en la bandeja del sistema, te avisa cuando alguien entra en vivo y puede iniciar solo al encender el PC.
 
 Descarga: **[última versión](../../releases/latest)** · Novedades: [CHANGELOG.md](CHANGELOG.md)
+
+### Novedades de la 1.8.1
+
+- **Logotipo propio**: LiveVault ya tiene marca. El icono del `.exe` y el de la bandeja son el mismo
+  dibujo (anillo + triángulo + punto de «en vivo»), la cabecera del panel lleva el logotipo y el
+  repositorio tiene imagen social y capturas en el README.
+- **El cajón de «Directos» es más ancho**: los botones de cada fila (favorita, ver, descargar,
+  analizar, reparar, borrar) ya no se cortaban en pantallas pequeñas.
+- Los colores de la bandeja siguen igual: gris vigilando, naranja en vivo, rojo grabando.
 
 ### Novedades de la 1.8
 

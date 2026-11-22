@@ -1,3 +1,26 @@
+# Cambios de la 1.8.1
+
+Identidad visual y un par de arreglos de interfaz.
+
+## Marca
+
+- **Logotipo**: cuadrado redondeado con anillo coral y triángulo de reproducción. Vale para el icono
+  del `.exe` (multi-resolución 16-256 px, con una variante simplificada a 16-32 px para que se
+  distinga en la barra de tareas), el icono de la bandeja y la cabecera del panel.
+- La bandeja usa el mismo dibujo con el color del estado (gris / naranja / rojo) en el anillo.
+- `tools/brand.py` genera todo (icono, `docs/logo.png`, `docs/logo.svg` y la imagen social de GitHub);
+  `docs/capturas/` tiene las capturas del README, hechas con datos de demostración.
+
+## Panel
+
+- La cabecera muestra el logotipo y la versión en un chip (`v1.8.1`), sin repetir «LiveVault».
+- El cajón de directos pasa de 760 a 900 px y con menos relleno: los botones de cada fila ya no se
+  cortaban cuando había muchas columnas.
+- El aviso que se ve al abrir la dirección del panel a mano (sin la clave) estaba mal redactado;
+  ahora explica cómo abrirlo desde la bandeja y cómo cerrar el programa.
+
+---
+
 # Cambios de la 1.8.0
 
 Primera versión pública. Cambia el nombre a **LiveVault** y se distribuye como `.exe` ya compilado.
