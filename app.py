@@ -20,6 +20,7 @@ import atexit
 import base64
 import collections
 import ctypes
+import hashlib
 import hmac
 import io
 import ipaddress
@@ -52,7 +53,7 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
-APP_VERSION = "1.8.1"
+APP_VERSION = "1.8.2"
 FROZEN = bool(getattr(sys, "frozen", False))
 WIN = os.name == "nt"
 NO_WINDOW = 0x08000000 if WIN else 0
@@ -650,6 +651,7 @@ DEFAULTS = {
     "retention_days": "0",        # 0 = no borrar por antiguedad
     "max_total_gb": "0",          # 0 = sin limite de tamano total
     "auto_update_on_start": "0",
+    "update_check": "1",          # avisar cuando haya una version nueva del programa
     "ytdlp_fallback": "1",
     "ffmpeg_path": "",            # opcional: ruta propia de ffmpeg
     "notifications": "1",         # avisos de Windows al detectar/grabar
@@ -3190,6 +3192,78 @@ def selftest(target: str, outfile: str) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- actualizaciones de la app
+# La app se actualiza desde SU repositorio: mira la ultima Release de GitHub, descarga el .exe,
+# comprueba el SHA-256 que publica el propio CI y se reemplaza a si misma.
+# Solo se aceptan URLs de github.com; si el hash no coincide, no se instala nada.
+GH_REPO = "Youshuu/livevault"
+GH_LATEST = f"https://api.github.com/repos/{GH_REPO}/releases/latest"
+GH_HOSTS = {"github.com", "api.github.com", "objects.githubusercontent.com",
+            "github-releases.githubusercontent.com", "release-assets.githubusercontent.com"}
+MAX_UPDATE_MB = 400
+
+
+def parse_version(texto: str) -> tuple[int, ...]:
+    """'v1.8.2' -> (1, 8, 2). Compara versiones sin dependencias externas."""
+    nums = [int(n) for n in re.findall(r"\d+", str(texto or ""))[:3]]
+    return tuple(nums + [0] * (3 - len(nums)))
+
+
+def version_mayor(nueva: str, actual: str = APP_VERSION) -> bool:
+    return parse_version(nueva) > parse_version(actual)
+
+
+def parse_sums(texto: str) -> dict[str, str]:
+    """Contenido de SHA256SUMS.txt -> {'LiveVault-1.8.2.exe': '<sha256>'}."""
+    salida: dict[str, str] = {}
+    for linea in str(texto or "").splitlines():
+        m = re.match(r"^\s*([0-9a-fA-F]{64})\s+\*?(\S+)\s*$", linea)
+        if m:
+            salida[m.group(2)] = m.group(1).lower()
+    return salida
+
+
+def sha256_file(ruta: Path) -> str:
+    h = hashlib.sha256()
+    with open(ruta, "rb") as f:
+        for bloque in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(bloque)
+    return h.hexdigest()
+
+
+def _url_de_github(url: str) -> bool:
+    try:
+        u = urlparse(url)
+    except ValueError:
+        return False
+    return u.scheme == "https" and (u.hostname or "").lower() in GH_HOSTS
+
+
+def check_latest_release(proxy: str = "") -> dict:
+    """Ultima Release publicada. Lanza RuntimeError si la respuesta no es la esperada."""
+    opener = _http_opener(proxy)
+    req = urllib.request.Request(GH_LATEST, headers={
+        "User-Agent": f"LiveVault/{APP_VERSION} (+https://github.com/{GH_REPO})",
+        "Accept": "application/vnd.github+json"})
+    with opener.open(req, timeout=15) as r:
+        datos = json.loads(r.read().decode("utf-8", "replace"))
+    tag = str(datos.get("tag_name") or "").strip()
+    if not tag:
+        raise RuntimeError("GitHub no devolvio ninguna version.")
+    activos = {str(a.get("name") or ""): a for a in (datos.get("assets") or [])}
+    exe = next((n for n in activos if n.lower().startswith("livevault") and n.lower().endswith(".exe")), "")
+    sums = next((n for n in activos if n.lower() == "sha256sums.txt"), "")
+    if not exe or not sums:
+        raise RuntimeError("La version publicada no trae el .exe o el SHA256SUMS.txt.")
+    url_exe = str(activos[exe].get("browser_download_url") or "")
+    url_sums = str(activos[sums].get("browser_download_url") or "")
+    if not (_url_de_github(url_exe) and _url_de_github(url_sums)):
+        raise RuntimeError("Las descargas no apuntan a GitHub.")
+    return {"tag": tag, "version": tag.lstrip("vV"), "notes": str(datos.get("body") or "")[:6000],
+            "exe": {"name": exe, "url": url_exe, "size": int(activos[exe].get("size") or 0)},
+            "sums": {"name": sums, "url": url_sums}}
+
+
 # --------------------------------------------------------------------------- reporte de diagnostico
 def tail_file(path: Path, n: int) -> str:
     try:
@@ -3614,6 +3688,14 @@ class App:
         self.pusher = Pusher(self.settings)
         self.engine = Engine(self.settings)
         self.updater = EngineUpdater()
+        # actualizaciones de la propia app (no del motor)
+        self.update_info: dict = {}
+        self.update_checked = 0.0
+        self.update_error = ""
+        self.update_progress: dict = {}
+        self._update_checking = False
+        self._update_installing = False
+        self._update_notified = ""
         self.loop = asyncio.new_event_loop()
         self.manager: Manager = None  # type: ignore
         self.httpd: Optional[ThreadingHTTPServer] = None
@@ -3831,6 +3913,160 @@ class App:
         d.mkdir(parents=True, exist_ok=True)
         open_folder(d)
 
+    # -- actualizaciones de la app ---------------------------------------
+    def update_state(self) -> dict:
+        """Lo que ve el panel sobre la version nueva."""
+        return {
+            "available": bool(self.update_info.get("available")),
+            "version": self.update_info.get("version", ""),
+            "notes": (self.update_info.get("notes", "")[:3000]
+                      if self.update_info.get("available") else ""),
+            "checked_ago": int(time.time() - self.update_checked) if self.update_checked else None,
+            "checking": self._update_checking,
+            "installing": self._update_installing,
+            "progress": dict(self.update_progress),
+            "error": self.update_error,
+        }
+
+    def check_updates(self, manual: bool = False) -> None:
+        """Mira si hay version nueva. En segundo plano: el panel nunca espera a GitHub."""
+        if self._update_checking:
+            return
+        self._update_checking = True
+        if manual:
+            self.update_error = ""
+
+        def trabajo() -> None:
+            try:
+                info = check_latest_release(self.settings.get("proxy").strip())
+                self.update_checked = time.time()
+                info["available"] = version_mayor(info["version"])
+                self.update_info = info
+                if info["available"] and self._update_notified != info["version"]:
+                    self._update_notified = info["version"]
+                    log.info("Version nueva disponible: %s (tienes %s)", info["version"], APP_VERSION)
+                    self.notify("Actualización disponible",
+                                f"LiveVault {info['version']} ya está disponible. "
+                                f"Puedes actualizarlo desde el panel.", "update")
+            except Exception as e:
+                self.update_error = redact(str(e)) if manual else ""
+                log.info("No se pudo comprobar si hay version nueva (%s): %s",
+                         type(e).__name__, redact(str(e)))
+            finally:
+                self._update_checking = False
+
+        threading.Thread(target=trabajo, daemon=True, name="update-check").start()
+
+    def install_update(self) -> None:
+        """Descarga, verifica y reemplaza el .exe. Solo con el programa empaquetado."""
+        if self._update_installing:
+            raise UserError("Ya se está instalando una actualización.", 409)
+        info = self.update_info
+        if not info.get("available"):
+            raise UserError("No hay ninguna versión nueva para instalar.", 409)
+        if not FROZEN:
+            raise UserError("Estás ejecutando el código fuente: actualiza con git. "
+                            "La actualización automática es para el .exe.", 409)
+        self._update_installing = True
+        self.update_progress = {"phase": "start", "pct": 0, "msg": "Preparando la actualización…"}
+        threading.Thread(target=self._install_update, daemon=True, name="update-install").start()
+
+    def _install_update(self) -> None:
+        exe = Path(sys.executable)
+        nuevo = exe.with_name(exe.name + ".new")
+        viejo = exe.with_name(exe.name + ".old")
+        prohibido = exe.with_name(".livevault_test")
+
+        def paso(fase: str, pct: int, msg: str) -> None:
+            self.update_progress = {"phase": fase, "pct": pct, "msg": msg}
+
+        try:
+            try:                                   # ¿se puede escribir junto al .exe?
+                prohibido.write_text("1")
+                prohibido.unlink()
+            except OSError:
+                raise UserError("La carpeta del programa no admite escritura "
+                                "(¿Archivos de programa?). Descarga la versión nueva a mano.")
+            info = self.update_info
+            opener = _http_opener(self.settings.get("proxy").strip())
+            cab = {"User-Agent": f"LiveVault/{APP_VERSION}"}
+
+            paso("sums", 1, "Comprobando la descarga…")
+            with opener.open(urllib.request.Request(info["sums"]["url"], headers=cab), timeout=20) as r:
+                sums = parse_sums(r.read().decode("utf-8", "replace"))
+            esperado = sums.get(info["exe"]["name"], "").lower()
+            if not esperado:
+                raise UserError("El SHA-256 publicado no incluye este .exe: no se instala nada.")
+
+            paso("download", 2, "Descargando…")
+            with opener.open(urllib.request.Request(info["exe"]["url"], headers=cab), timeout=90) as r:
+                total = int(r.headers.get("Content-Length") or info["exe"].get("size") or 0)
+                if total > MAX_UPDATE_MB * 1024 * 1024:
+                    raise UserError("La descarga es demasiado grande: no se instala nada.")
+                leido = 0
+                with open(nuevo, "wb") as f:
+                    while True:
+                        bloque = r.read(256 * 1024)
+                        if not bloque:
+                            break
+                        f.write(bloque)
+                        leido += len(bloque)
+                        if total:
+                            paso("download", min(95, int(leido * 95 / total)),
+                                 f"Descargando… {leido // (1024 * 1024)} de "
+                                 f"{max(1, total // (1024 * 1024))} MB")
+
+            paso("verify", 96, "Comprobando el archivo…")
+            if nuevo.stat().st_size < 20 * 1024 * 1024:
+                raise UserError("El archivo descargado es demasiado pequeño: no se instala nada.")
+            with open(nuevo, "rb") as f:
+                if f.read(2) != b"MZ":
+                    raise UserError("El archivo descargado no es un .exe de Windows.")
+            obtenido = sha256_file(nuevo)
+            if obtenido != esperado:
+                raise UserError("El SHA-256 no coincide con el publicado: puede ser una descarga "
+                                "dañada o manipulada. No se ha instalado nada.")
+
+            paso("install", 98, "Instalando…")
+            try:
+                if viejo.exists():
+                    viejo.unlink()
+                os.replace(exe, viejo)             # al .exe en uso se le puede cambiar el nombre
+                try:
+                    os.replace(nuevo, exe)         # el nuevo ocupa su sitio
+                except OSError:
+                    os.replace(viejo, exe)         # deshacer si falla
+                    raise
+            except OSError as e:
+                raise UserError(f"No se pudo reemplazar el programa: {e}. "
+                                "Queda la versión anterior intacta.")
+
+            log.info("Actualizado a %s; reiniciando.", info["version"])
+            paso("done", 100, "Reiniciando con la versión nueva…")
+            try:
+                subprocess.Popen([str(exe), "--port", str(self.port), "--no-browser", "--restarted"],
+                                 cwd=str(APP_DIR), stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 creationflags=(0x00000008 | 0x00000200) if WIN else 0)
+            except OSError as e:
+                raise UserError(f"Se instaló la versión nueva pero no se pudo reiniciar: {e}. "
+                                "Ábrelo a mano.")
+            time.sleep(1.0)
+            self.request_quit()                    # cierre ordenado; la instancia nueva espera el puerto
+        except UserError as e:
+            log.warning("Actualizacion no aplicada: %s", e)
+            paso("error", 0, str(e))
+        except Exception as e:
+            log.warning("Actualizacion fallida\n%s", traceback.format_exc())
+            paso("error", 0, f"No se pudo actualizar: {redact(str(e))}")
+        finally:
+            self._update_installing = False
+            try:
+                if nuevo.exists() and self.update_progress.get("phase") != "done":
+                    nuevo.unlink()                 # no dejar restos de una descarga fallida
+            except OSError:
+                pass
+
     # -- arranque
     def start(self) -> None:
         self._bind()                                   # termina el proceso si ya hay otra instancia
@@ -3861,6 +4097,22 @@ class App:
             finally:
                 self.loop.call_soon_threadsafe(self.manager.ready.set)
         threading.Thread(target=boot, daemon=True).start()
+
+        def reloj_actualizaciones() -> None:
+            """Mira si hay version nueva al arrancar y cada ~6 h (sin bloquear nada)."""
+            time.sleep(15)                       # no competir con el arranque ni con el motor
+            while not self.quitting:
+                try:
+                    if self.settings.get("update_check") == "1":
+                        self.check_updates()
+                except Exception:
+                    log.debug("Fallo el reloj de actualizaciones\n%s", traceback.format_exc())
+                for _ in range(6 * 360):          # ~6 h, despertando para poder salir
+                    if self.quitting:
+                        return
+                    time.sleep(10)
+
+        threading.Thread(target=reloj_actualizaciones, daemon=True, name="update-loop").start()
 
         log.info("Interfaz lista en %s%s", self.url, "  (iniciado en segundo plano)" if self.minimized else "")
         if self.open_browser and not self.minimized:
@@ -5087,6 +5339,7 @@ def make_handler(app: App):
                              "low": mgr.low_space},
                     "jobs": app.active_jobs(),
                     "bot": app.bot_status(),
+                    "update": app.update_state(),
                     "tray": app.tray is not None,
                     "app_version": APP_VERSION,
                 })
@@ -5388,6 +5641,15 @@ def make_handler(app: App):
             if method == "POST" and path == "/api/engine/update":
                 started = app.updater.start()
                 return self._json({"started": started})
+            if method == "POST" and path == "/api/update/check":
+                app.check_updates(manual=True)
+                return self._json({"ok": True})
+            if method == "POST" and path == "/api/update/install":
+                try:
+                    app.install_update()
+                except UserError as e:
+                    return self._json({"error": str(e)}, e.code)
+                return self._json({"ok": True})
             if method == "POST" and path == "/api/restart":
                 app.restart()
                 return self._json({"ok": True})
@@ -5454,7 +5716,7 @@ def make_handler(app: App):
                 clean["quality"] = body["quality"]
             if body.get("final_format") in ("mp4", "mkv"):
                 clean["final_format"] = body["final_format"]
-            for k in ("auto_update_on_start", "ytdlp_fallback", "notifications",
+            for k in ("auto_update_on_start", "ytdlp_fallback", "notifications", "update_check",
                       "push_live", "push_recording", "push_saved", "push_problem", "push_session",
                       "push_ended"):
                 if k in body:
@@ -5624,6 +5886,23 @@ def _fatal(msg: str, title: str = "LiveVault") -> None:
         pass
 
 
+def _limpiar_version_anterior() -> None:
+    """Borra el .old que deja la autoactualizacion (la instancia vieja puede seguir usandolo)."""
+    viejo = Path(sys.executable).with_name(Path(sys.executable).name + ".old")
+    if not viejo.exists():
+        return
+
+    def trabajo() -> None:
+        for _ in range(12):                    # ~1 minuto: el proceso anterior tarda en soltarlo
+            try:
+                viejo.unlink(missing_ok=True)
+                return
+            except OSError:
+                time.sleep(5)
+
+    threading.Thread(target=trabajo, daemon=True, name="limpiar-old").start()
+
+
 def main() -> int:
     argv = sys.argv[1:]
     if argv and argv[0] == "--pip-worker":          # modos auxiliares (actualizar / probar el motor)
@@ -5645,6 +5924,10 @@ def main() -> int:
     setup_logging()
     log.info("LiveVault %s | Python %s | %s | datos en %s", APP_VERSION, platform.python_version(),
              "exe" if FROZEN else "script", DATA_DIR)
+    try:                                     # resto de una actualizacion anterior
+        _limpiar_version_anterior()
+    except Exception:
+        pass
     if DATA_DIR_FALLBACK:
         log.warning("La carpeta del programa no admite escritura: "
                     "la base de datos y los ajustes se guardan en %s", DATA_DIR)

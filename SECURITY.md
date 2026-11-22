@@ -52,6 +52,13 @@ Telegram, grabaciones). Interesan especialmente:
 
 - **El `.exe` no está firmado** y Windows SmartScreen avisará. Verificar la descarga con el
   `SHA256SUMS.txt` del release es la mitigación disponible.
+- **Actualizaciones**: el programa se actualiza solo desde la Release oficial de este repositorio.
+  Solo acepta URLs de `github.com`, descarga el `.exe` y **comprueba el SHA-256** que publica el
+  propio CI en `SHA256SUMS.txt`; si no coincide, no instala nada. Esto protege frente a descargas
+  corruptas o manipulación del archivo, pero **no** frente a que la cuenta de GitHub del proyecto se
+  vea comprometida: quien controle la cuenta puede publicar una Release y su SHA-256. Si te preocupa
+  ese escenario, desactiva **Ajustes → Actualizaciones** y compila desde el código fuente (que es lo
+  que hace el CI, con `LiveVault.spec`).
 - **El actualizador de motor instala versiones nuevas de TikTokLive y ffmpeg desde PyPI** cuando el
   usuario lo pide. Es una decisión de diseño (TikTok rompe la detección cada pocas semanas). Por
   defecto no se actualiza solo al arrancar. Un paquete comprometido en PyPI podría ejecutar código:

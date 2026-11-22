@@ -93,6 +93,11 @@ rutas personales dentro y sale siempre igual. El flujo es:
 5. Comprueba la página del release y descarga el `.exe` como lo haría un usuario (Edge, SmartScreen,
    carpeta nueva) antes de darlo por bueno.
 
+> **Las versiones no se reutilizan.** La app avisa y se actualiza sola cuando la Release tiene una
+> versión **mayor** que la suya; si publicas con el mismo número, nadie recibirá el aviso. Y no borres
+> nunca el `.exe` ni el `SHA256SUMS.txt` de una Release publicada: son lo que descargan los programas
+> que aún no se han actualizado.
+
 Si algo falla: pestaña **Actions** → el run → los logs (y `build.log`, que se guarda como artefacto).
 
 ## Seguridad

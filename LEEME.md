@@ -1,9 +1,16 @@
-# LiveVault 1.8.1
+# LiveVault 1.8.2
 
 Vigila usuarios de TikTok y graba sus lives automáticamente (varios a la vez).
 Vive en la bandeja del sistema, te avisa cuando alguien entra en vivo y puede iniciar solo al encender el PC.
 
 Descarga: **[última versión](../../releases/latest)** · Novedades: [CHANGELOG.md](CHANGELOG.md)
+
+### Novedades de la 1.8.2
+
+- **Se actualiza solo, sin pasar por GitHub**: cuando hay una versión nueva el panel lo avisa y el
+  botón **Actualizar** la descarga, comprueba su SHA-256 y reinicia el programa ya actualizado.
+- Mientras descarga se ve el progreso; si algo no cuadra (hash, tamaño, tipo de archivo) **no se
+  instala nada**. En **Ajustes → Actualizaciones** puedes desactivar los avisos o pulsar «Buscar ahora».
 
 ### Novedades de la 1.8.1
 
@@ -51,9 +58,15 @@ El historial de versiones anteriores está en [CHANGELOG.md](CHANGELOG.md).
    a `%LOCALAPPDATA%\LiveVault\datos` y no verías tus usuarios.
 3. Doble clic. Ya está: no hace falta Python ni ffmpeg.
 
-**Para actualizar**: cierra el programa (**⏻ Salir**), sustituye el `.exe` viejo por el nuevo en la
-misma carpeta y ábrelo. Usuarios, ajustes y grabaciones se conservan: están en `datos` y `grabaciones`,
-no dentro del `.exe`.
+**Para actualizar**: cuando haya una versión nueva, el panel lo avisa con un banner
+(«Hay una versión nueva: LiveVault X.Y.Z») y una notificación de Windows. Pulsa **Actualizar**: se
+descarga, se comprueba su SHA-256 y el programa se reinicia ya actualizado, sin tocar tus datos ni
+ajustes. El panel se reconecta solo.
+
+Si prefieres hacerlo a mano: cierra el programa (**⏻ Salir**), sustituye el `.exe` viejo por el nuevo
+en la misma carpeta y ábrelo. Usuarios, ajustes y grabaciones se conservan: están en `datos` y
+`grabaciones`, no dentro del `.exe`. Si la carpeta del programa no admite escritura (por ejemplo
+`Archivos de programa`), la actualización automática avisa y te remite a la descarga manual.
 
 La primera vez Windows puede decir "Windows protegió su PC" (el programa **no está firmado**):
 **Más información → Ejecutar de todas formas**. Si el antivirus lo bloquea, es un falso positivo

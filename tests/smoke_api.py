@@ -95,6 +95,7 @@ check("panel con clave", code == 200 and b"LiveVault" in body and b"__TK_TOKEN__
 code, data = jget("/api/state")
 disk = data.get("disk") or {}
 check("state con users/disk/jobs", code == 200 and "users" in data and "disk" in data and "jobs" in data)
+check("state incluye actualizaciones", code == 200 and isinstance(data.get("update"), dict), data.get("update"))
 check("state version", data.get("app_version") == app.APP_VERSION, data.get("app_version"))
 
 code, _, _ = call("/api/settings", "POST", {"check_interval": 5}, token=False)
@@ -330,6 +331,9 @@ check("limpiar favuser", code == 200 and not fa.exists(), code)
 
 code, _ = jget("/api/jobs/000000000000")
 check("trabajo inexistente 404", code == 404, code)
+
+code, data = jget("/api/update/install", method="POST")
+check("actualizar sin version nueva 409", code == 409, (code, data))
 
 code, data = jget("/api/users/smoketest/stop", method="POST")
 check("detener", code == 200 and data.get("ok"), (code, data))

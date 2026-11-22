@@ -147,7 +147,7 @@ pre{background:#0b0d11;border:1px solid var(--line);border-radius:10px;padding:1
           stroke-width="19" stroke-linejoin="round"/>
   </svg>
   <h1>Live<span>Vault</span></h1>
-  <span id="chipVer" class="chip" title="Versión de LiveVault">v1.8.1</span>
+  <span id="chipVer" class="chip" title="Versión de LiveVault">v1.8.2</span>
   <span id="chipEngine" class="chip">motor…</span>
   <span id="chipFfmpeg" class="chip">ffmpeg…</span>
   <span id="chipDisk" class="chip" style="display:none">disco…</span>
@@ -276,6 +276,13 @@ pre{background:#0b0d11;border:1px solid var(--line);border-radius:10px;padding:1
     </div>
     <div class="row2"><button class="btn small" type="button" id="btnPushTest">Guardar y enviar prueba</button><small id="pushRes" style="color:var(--muted)"></small></div>
 
+    <div class="sec">🔄 Actualizaciones</div>
+    <label class="toggle"><input type="checkbox" id="sUpdCheck"> Avisarme cuando haya una versión nueva</label>
+    <div class="row2">
+      <button class="btn small" type="button" id="btnUpdCheck">Buscar ahora</button>
+      <small id="updInfo" style="color:var(--muted)"></small>
+    </div>
+
     <div class="sec">⚙️ Avanzado</div>
     <details class="adv">
       <summary>Opciones para casos concretos</summary>
@@ -289,6 +296,25 @@ pre{background:#0b0d11;border:1px solid var(--line);border-radius:10px;padding:1
     </details>
   </div>
   <div class="mfoot"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="sSave">Guardar</button></div>
+</div></div>
+
+<!-- actualización de la app -->
+<div class="modal" id="mUpdate"><div class="mbox" style="width:min(660px,100%)">
+  <h2>Actualización disponible</h2>
+  <div class="mbody">
+    <p id="uVer" style="margin:0 0 10px"></p>
+    <pre id="uNotes" style="max-height:300px;overflow:auto;white-space:pre-wrap"></pre>
+    <div id="uProg" style="display:none">
+      <div class="bar"><span id="uBar"></span></div>
+      <small id="uMsg" style="color:var(--muted)"></small>
+    </div>
+    <small style="color:var(--muted)">Se descarga el <code>.exe</code> de la Release oficial, se comprueba su
+      SHA-256 y solo entonces se reemplaza. Si algo no cuadra, no se instala nada.</small>
+  </div>
+  <div class="mfoot">
+    <button class="btn" data-close>Más tarde</button>
+    <button class="btn primary" id="uInstall">Actualizar ahora</button>
+  </div>
 </div></div>
 
 <!-- motor -->
@@ -402,6 +428,19 @@ function render() {
   if (state.bot && state.bot.error) b += `<div class="banner warn">🤖 Bot de Telegram: ${esc(state.bot.error)}. Revisa el token en Ajustes.</div>`;
   if (state.disk && state.disk.low) b += `<div class="banner warn">💾 Quedan ${state.disk.free_gb} GB libres: las grabaciones automáticas están en pausa. Libera espacio o ajusta la retención. <button class="btn small" onclick="$('#btnSettings').click()">Ajustes</button></div>`;
   if (state.blocked_for > 0) b += `<div class="banner info">TikTok está limitando las consultas. Pausa automática, se reanuda en ${state.blocked_for} s.</div>`;
+  const up = state.update || {}, pr = up.progress || {};
+  if (pr.phase === 'error') b += `<div class="banner warn">⚠ No se pudo actualizar: ${esc(pr.msg)} <button class="btn small" onclick="abrirUpdate()">Ver</button></div>`;
+  else if (pr.phase && pr.phase !== 'done') b += `<div class="banner info">🔄 ${esc(pr.msg)} ${pr.pct ? `<b>${pr.pct}%</b>` : ''}${pr.pct ? ` <span style="display:inline-block;width:140px;height:6px;border-radius:3px;background:var(--panel2);vertical-align:middle;overflow:hidden"><span style="display:block;height:100%;width:${pr.pct}%;background:var(--red)"></span></span>` : ''}</div>`;
+  else if (up.available) b += `<div class="banner info">🆕 Hay una versión nueva: <b>LiveVault ${esc(up.version)}</b> (tienes ${esc(state.app_version)}). <button class="btn small" onclick="abrirUpdate()">Ver novedades</button> <button class="btn small primary" onclick="instalarUpdate()">Actualizar</button></div>`;
+  else if (up.error) b += `<div class="banner warn">No se pudo comprobar si hay versiones nuevas. <button class="btn small" onclick="buscarUpdate()">Reintentar</button></div>`;
+  if (document.getElementById('mUpdate').classList.contains('open') && state.update) {
+    const pr2 = state.update.progress || {};
+    const enCurso = pr2.phase && pr2.phase !== 'error' && pr2.phase !== 'done' && pr2.phase !== 'start';
+    $('#uProg').style.display = enCurso ? '' : 'none';
+    $('#uBar').style.width = (pr2.pct || 0) + '%';
+    $('#uMsg').textContent = pr2.msg || '';
+    $('#uInstall').disabled = !!enCurso;
+  }
   if (e.restart_needed) b += '<div class="banner info">Motor actualizado. <button class="btn small" onclick="doRestart()">Reiniciar para aplicarlo</button></div>';
   let seen = false; try { seen = localStorage.getItem('hintTray') === '1'; } catch (x) {}
   if (state.tray && !seen) b += '<div class="banner info">💡 Al cerrar esta ventana el programa <b>sigue grabando desde la bandeja</b> (junto al reloj). Para cerrarlo del todo usa <b>⏻ Salir</b> o clic derecho en su icono → Salir. <button class="btn small" onclick="try{localStorage.setItem(\'hintTray\',\'1\')}catch(x){};state.tray=false;render()">Entendido</button></div>';
@@ -689,6 +728,48 @@ document.querySelectorAll('[data-clear]').forEach(b => b.onclick = () => {
   cleared.add(k); b.disabled = true; b.textContent = 'Se borrará';
 });
 
+/* ---- actualizaciones de la app ---- */
+function abrirUpdate() {
+  const u = (state && state.update) || {};
+  const pr = u.progress || {};
+  $('#uVer').innerHTML = u.version
+    ? `Hay una versión nueva: <b>LiveVault ${esc(u.version)}</b>. Tienes la ${esc(state.app_version)}.`
+    : 'Comprobando si hay novedades…';
+  $('#uNotes').textContent = u.notes || 'Esta versión no trae notas.';
+  const enCurso = pr.phase && pr.phase !== 'error' && pr.phase !== 'done' && pr.phase !== 'start';
+  $('#uProg').style.display = enCurso ? '' : 'none';
+  $('#uBar').style.width = (pr.pct || 0) + '%';
+  $('#uMsg').textContent = pr.msg || '';
+  $('#uInstall').disabled = !!enCurso;
+  openModal('#mUpdate');
+  if (!u.version) buscarUpdate();
+}
+async function buscarUpdate() {
+  try { await api('/api/update/check', 'POST'); }
+  catch (e) { toast(e.message, true); }
+}
+async function instalarUpdate() {
+  const u = (state && state.update) || {};
+  if (!u.available) { toast('No hay ninguna versión nueva', true); return; }
+  if (!confirm(`Se descargará LiveVault ${u.version}, se comprobará su SHA-256 y el programa se cerrará ` +
+               `y volverá a abrir.\n\nSi hay grabaciones en curso, se detendrán.`)) return;
+  try {
+    await api('/api/update/install', 'POST');
+    toast('Descargando la actualización…');
+    abrirUpdate();
+  } catch (e) { toast(e.message, true); }
+}
+$('#uInstall').onclick = instalarUpdate;
+$('#btnUpdCheck').onclick = async () => {
+  $('#updInfo').textContent = 'Comprobando…';
+  await buscarUpdate();
+  setTimeout(() => {
+    const u = (state && state.update) || {};
+    $('#updInfo').textContent = u.available ? `Hay una versión nueva: ${u.version}`
+      : (u.error ? 'No se pudo comprobar (revisa la conexión)' : `Tienes la última versión (${state.app_version})`);
+  }, 3000);
+};
+
 $('#btnSettings').onclick = async () => {
   const s = await api('/api/settings');
   resetClearButtons();
@@ -715,6 +796,10 @@ $('#btnSettings').onclick = async () => {
   $('#pEnded').checked = s.push_ended === '1';
   $('#pProblem').checked = s.push_problem === '1'; $('#pSession').checked = s.push_session === '1';
   $('#rowAuto').style.display = s.autostart_supported ? '' : 'none'; $('#sAutostart').checked = !!s.autostart;
+  $('#sUpdCheck').checked = s.update_check === '1';
+  const uu = (state && state.update) || {};
+  $('#updInfo').textContent = uu.available ? `Hay una versión nueva: ${uu.version}`
+    : `Tienes la última versión (${state ? state.app_version : ''})`;
   openModal('#mSettings');
 };
 async function saveSettings() {
@@ -729,6 +814,7 @@ async function saveSettings() {
     min_keep_kb: $('#sMinKeep').value, ffmpeg_path: $('#sFfmpeg').value,
     ytdlp_fallback: $('#sFallback').checked, auto_update_on_start: $('#sAutoUpd').checked,
     notifications: $('#sNotif').checked,
+    update_check: $('#sUpdCheck').checked,
     ...($('#rowAuto').style.display === 'none' ? {} : {autostart: $('#sAutostart').checked})};
   for (const k of cleared) body[k + '_clear'] = true;
   await api('/api/settings', 'POST', body);

@@ -7,7 +7,7 @@
 ; solo aporta acceso directo en el menu Inicio y desinstalador.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.8.1"
+  #define MyAppVersion "1.8.2"
 #endif
 
 #define MyAppName "LiveVault"

@@ -71,6 +71,8 @@ Telegram, que además acepta órdenes como `/add` o `/record`.*
 - **Bot de Telegram**: `/add`, `/list`, `/user`, `/record`, `/stop`, `/last`, `/del`… desde el móvil.
 - **Favoritas (★)**, borrar todas, retención por días o tamaño, aviso de poco disco.
 - **Un directo = una sesión**: los cortes y reconexiones se agrupan y se pueden unir con un clic.
+- **Se actualiza solo**: te avisa cuando hay una versión nueva y, con un clic, la descarga,
+  comprueba su SHA-256 y se reinicia ya actualizada. No hace falta volver a GitHub.
 - **Diagnóstico**: reporte, logs y paquete de soporte SIN claves (y con las rutas de tu PC ocultas).
 
 Detalles de todo esto en el [manual completo](LEEME.md).
@@ -85,6 +87,9 @@ Detalles de todo esto en el [manual completo](LEEME.md).
 - Los secretos (`sessionid`, token del bot, proxy y webhook) se guardan **cifrados con tu usuario de
   Windows (DPAPI)**. Si copias `datos` a otro PC, tendrás que volver a escribirlos.
 - Los reportes y logs **ocultan** claves, `sessionid` y credenciales automáticamente.
+- **Actualizaciones verificadas**: el programa solo acepta descargas de `github.com`, comprueba el
+  **SHA-256** publicado en la Release y, si no coincide, no instala nada. Si la carpeta del programa
+  no admite escritura, te dice que la descargues a mano en vez de intentarlo.
 - **No hay telemetría ni servidor propio**: el programa solo habla con TikTok (para detectar y bajar
   el directo) y con los servicios de aviso que tú configures (ntfy, Telegram, webhook). Nada más.
 - El programa guarda en `datos/logs/` un registro de lo que hace (sin secretos), para poder

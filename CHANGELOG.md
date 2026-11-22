@@ -1,3 +1,33 @@
+# Cambios de la 1.8.2
+
+Actualizaciones desde el propio programa.
+
+## Ya no hace falta volver a GitHub
+
+- **Aviso de versión nueva**: el programa mira la última Release al arrancar y cada ~6 horas. Si hay
+  una más moderna, sale un aviso en el panel («Hay una versión nueva: LiveVault X.Y.Z») y una
+  notificación de Windows. Se puede desactivar en **Ajustes → Actualizaciones**.
+- **Actualizar con un clic**: el botón **Actualizar** descarga el `.exe` de la Release, **comprueba su
+  SHA-256** contra el `SHA256SUMS.txt` publicado, lo sustituye y se reinicia ya actualizado. El panel
+  se reconecta solo (la clave del panel se conserva), así que no hay que volver a abrirlo.
+- **Con red de seguridad**: si el hash no coincide, el archivo no es un `.exe` de Windows o pesa
+  demasiado poco, **no se instala nada** y se avisa. Si algo falla al reemplazar el archivo, se
+  restaura el anterior. Si la carpeta del programa no admite escritura, dice que lo descargues a mano.
+- Solo se aceptan descargas de `github.com` (y sus CDN): una respuesta de la API manipulada no puede
+  apuntar a otro servidor.
+- Aviso antes de instalar si hay grabaciones en curso: se detendrán.
+
+## Ajustes y seguridad
+
+- Nueva sección **Ajustes → Actualizaciones**: «Avisarme cuando haya una versión nueva» y botón
+  «Buscar ahora» que dice si tienes la última.
+- Mientras descarga se ve el progreso en el panel (MB y porcentaje), y los errores con «Reintentar».
+- El `.old` de la versión anterior se borra en el siguiente arranque.
+- 13 pruebas nuevas del actualizador (comparación de versiones, `SHA256SUMS.txt`, validación de URLs
+  de GitHub, respuesta de la API y los casos en los que **no** debe instalar).
+
+---
+
 # Cambios de la 1.8.1
 
 Identidad visual y un par de arreglos de interfaz.
