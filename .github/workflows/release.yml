@@ -137,29 +137,30 @@ jobs:
           $sec = [regex]::Match($cl, '(?ms)^#\s*Cambios de la\s+\S+\s*\r?\n(.*?)(?=^---|\z)')
           $novedades = if ($sec.Success -and $sec.Groups[1].Value.Trim()) { $sec.Groups[1].Value.Trim() }
                        else { "Ver CHANGELOG.md." }
-          $notas = @'
-## LiveVault {0}
+          $plantilla = @'
+          ## LiveVault {0}
 
-**Descarga `LiveVault-{0}.exe`** (Windows 10/11 de 64 bits). No hace falta instalar Python.
+          **Descarga `LiveVault-{0}.exe`** (Windows 10/11 de 64 bits). No hace falta instalar Python.
 
-### Cómo empezar
+          ### Cómo empezar
 
-1. Guarda el `.exe` en una carpeta local, por ejemplo `C:\LiveVault` (mejor fuera de OneDrive).
-2. Doble clic. Si Windows dice "Windows protegió su PC": **Más información → Ejecutar de todas formas** (el .exe no está firmado).
-3. Pega el `@usuario` y espera a que empiece el directo.
+          1. Guarda el `.exe` en una carpeta local, por ejemplo `C:\LiveVault` (mejor fuera de OneDrive).
+          2. Doble clic. Si Windows dice "Windows protegió su PC": **Más información → Ejecutar de todas formas** (el .exe no está firmado).
+          3. Pega el `@usuario` y espera a que empiece el directo.
 
-Si el antivirus lo bloquea, suele ser un falso positivo de los .exe de PyInstaller: añádelo a las exclusiones.
+          Si el antivirus lo bloquea, suele ser un falso positivo de los .exe de PyInstaller: añádelo a las exclusiones.
 
-### Comprobar la descarga
+          ### Comprobar la descarga
 
-`Get-FileHash LiveVault-{0}.exe -Algorithm SHA256` debe coincidir con `SHA256SUMS.txt`.
+          `Get-FileHash LiveVault-{0}.exe -Algorithm SHA256` debe coincidir con `SHA256SUMS.txt`.
 
-### Novedades
+          ### Novedades
 
-{1}
+          {1}
 
-Los datos (usuarios, ajustes y grabaciones) se guardan en la carpeta `datos` junto al .exe.
-'@ -f $v, $novedades
+          Los datos (usuarios, ajustes y grabaciones) se guardan en la carpeta `datos` junto al .exe.
+          '@
+          $notas = $plantilla -f $v, $novedades
           $notas | Set-Content -Encoding utf8 "$env:RUNNER_TEMP\notas.md"
           gh release create "v$v" "dist\LiveVault-$v.exe" "dist\SHA256SUMS.txt" `
             --title "LiveVault $v" --notes-file "$env:RUNNER_TEMP\notas.md" --verify-tag

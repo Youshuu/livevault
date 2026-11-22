@@ -3941,6 +3941,12 @@ class App:
         threading.Thread(target=self._quit_worker, daemon=True, name="quit").start()
 
     def _quit_worker(self) -> None:
+        # En el .exe (sin consola) el proceso debe cerrarse siempre, aunque un hilo de terceros
+        # (pystray deja uno no-daemon) siga vivo o una grabacion tarde en finalizar.
+        if FROZEN:
+            watchdog = threading.Timer(30.0, self._force_exit)
+            watchdog.daemon = True
+            watchdog.start()
         try:
             if any(u["status"] == "recording" for u in self.manager_snapshot()):
                 self.notify("Cerrando", "Guardando las grabaciones en curso antes de salir…")
@@ -3948,7 +3954,28 @@ class App:
         finally:
             if self.tray:
                 self.tray.stop()
+            try:
+                self._cleanup_instance()
+            except Exception:
+                pass
             self.quit_event.set()
+            if FROZEN:
+                salida = threading.Timer(1.0, lambda: self._force_exit(aviso=False))
+                salida.daemon = True
+                salida.start()
+
+    def _force_exit(self, aviso: bool = True) -> None:
+        if aviso:
+            log.warning("El cierre tardo demasiado; saliendo igualmente.")
+        try:
+            kill_children()                      # no dejar ffmpeg grabando en segundo plano
+        except Exception:
+            pass
+        try:
+            logging.shutdown()                   # volcar el registro antes de salir
+        except Exception:
+            pass
+        os._exit(0)
 
     def restart(self) -> None:
         def go():

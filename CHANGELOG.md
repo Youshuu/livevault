@@ -35,6 +35,9 @@ Primera versión pública. Cambia el nombre a **LiveVault** y se distribuye como
 
 - Si el programa no arranca (base de datos, puertos ocupados, fallo inesperado) muestra un **aviso en
   pantalla**; el `.exe` no tiene consola y antes no se veía nada.
+- **«Salir» cierra de verdad**: en el `.exe`, el proceso termina en 1–2 s aunque la bandeja del sistema
+  deje un hilo suyo vivo o una grabación tarde en finalizar. Antes podía quedarse en el Administrador
+  de tareas (parecía cerrado pero seguía ejecutándose).
 - La creación del icono de la bandeja ya no puede impedir el arranque: si falla, se sigue sin bandeja.
 - Se avisa en el registro si la carpeta de datos está en **OneDrive** o si el programa tuvo que usar
   `%LOCALAPPDATA%\LiveVault\datos`.
