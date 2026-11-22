@@ -1,0 +1,9 @@
+# Dependencias necesarias para COMPILAR (no para usar el programa).
+# Versiones fijadas para que el .exe de cada release se construya igual.
+
+pyinstaller==6.22.3
+
+# pip va dentro del .exe: la app lo usa para actualizar su propio motor
+# (app.py -> pip_worker). Si se cambia esta version, hay que probar
+# "Motor -> Buscar y actualizar" en el .exe antes de publicar.
+pip==26.2.1

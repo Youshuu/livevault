@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Problema de seguridad
+    url: https://github.com/OWNER/REPO/security/advisories/new
+    about: No abras un issue público con vulnerabilidades. Usa el reporte privado.
+  - name: 📖 Manual completo
+    url: https://github.com/OWNER/REPO/blob/main/LEEME.md
+    about: Antes de preguntar, mira el manual y la sección de problemas frecuentes.

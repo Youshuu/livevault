@@ -1,0 +1,10 @@
+# Versiones con las que se construyo y probo la aplicacion en Windows.
+# Se usan al instalar dependencias:  pip install -r requirements.txt -c constraints.txt
+# El motor que actualiza la propia app puede instalar versiones mas nuevas aparte;
+# estas son las de la base del .exe.
+TikTokLive==7.0.1
+imageio-ffmpeg==0.7.0
+yt-dlp==2026.10.26
+pystray==0.19.5
+pillow==13.0.0
+pyinstaller==6.22.3

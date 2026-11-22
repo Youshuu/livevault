@@ -1,0 +1,55 @@
+# --- Datos del usuario (JAMAS se suben) -------------------------------------
+datos/
+grabaciones/
+tests/.test-data/
+tests/.test-data-*/
+
+# --- Entornos virtuales y compilacion ---------------------------------------
+.venv/
+.buildvenv/
+venv/
+build/
+dist/
+.build/
+*.spec.bak
+build.log
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# --- Salidas del programa ---------------------------------------------------
+*.exe
+*.msi
+*.zip
+*.7z
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+*.mp4
+*.mkv
+*.jpg
+*.png
+!icon.ico
+!ui/*.png
+
+# --- Secretos y configuracion local -----------------------------------------
+.env
+.env.*
+*.pfx
+*.cer
+*.pem
+*.key
+secrets.txt
+
+# --- Sistema / editores ------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

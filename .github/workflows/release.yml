@@ -1,0 +1,165 @@
+name: release
+
+# Compila LiveVault.exe en un Windows limpio, lo prueba de verdad y lo publica.
+#   - Al empujar un tag vX.Y.Z  ->  compila, verifica y crea la Release con el .exe.
+#   - A mano (Actions -> release -> Run workflow) -> solo compila y deja el .exe como
+#     artefacto descargable, sin publicar nada.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"          # la version con la que se probo todo
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-build.txt
+            constraints.txt
+
+      - name: Comprobar que la version coincide con el tag
+        shell: pwsh
+        run: |
+          $app = [regex]::Match((Get-Content app.py -Raw), 'APP_VERSION\s*=\s*"([^"]+)"').Groups[1].Value
+          $iss = [regex]::Match((Get-Content instalador.iss -Raw), 'MyAppVersion\s+"([^"]+)"').Groups[1].Value
+          if (-not $app) { throw "No se pudo leer APP_VERSION de app.py" }
+          if ($app -ne $iss) { throw "app.py dice $app y instalador.iss dice $iss" }
+          foreach ($f in "LEEME.md", "CHANGELOG.md") {
+            if (-not (Select-String -Path $f -SimpleMatch $app)) { throw "$f no menciona la version $app" }
+          }
+          if ("${{ github.event_name }}" -eq "push") {
+            if ("v$app" -ne "${{ github.ref_name }}") {
+              throw "El tag ${{ github.ref_name }} no coincide con APP_VERSION ($app)"
+            }
+          }
+          "Version: $app"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install -r requirements.txt -r requirements-build.txt -c constraints.txt
+          python -m pip install "ruff>=0.11,<1"
+
+      - name: Ruff (errores graves)
+        run: python -m ruff check .
+
+      - name: Pruebas unitarias
+        run: python -m unittest discover -s tests -v
+
+      - name: Prueba del panel (API)
+        run: python tests/smoke_api.py
+
+      - name: Compilar LiveVault.exe
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --distpath dist --workpath build LiveVault.spec 2>&1 |
+            Tee-Object -FilePath build.log
+          if (-not (Test-Path "dist\LiveVault.exe")) { throw "PyInstaller no genero dist\LiveVault.exe" }
+          "Tamano: {0:N1} MB" -f ((Get-Item dist\LiveVault.exe).Length / 1MB)
+
+      - name: Probar el .exe ya empaquetado
+        shell: pwsh
+        run: |
+          # Arranca el binario real (no el codigo fuente) y comprueba que el motor y ffmpeg
+          # que lleva dentro funcionan. Es la prueba que detecta los ImportError solo del .exe.
+          $motor = Join-Path $env:RUNNER_TEMP "motor-vacio"
+          $out = Join-Path $env:RUNNER_TEMP "selftest.txt"
+          New-Item -ItemType Directory -Force $motor | Out-Null
+          $p = Start-Process -FilePath ".\dist\LiveVault.exe" -ArgumentList @("--selftest", $motor, $out) `
+                             -Wait -PassThru
+          if (Test-Path $out) { Get-Content $out }
+          if ($p.ExitCode -ne 0) { throw "El selftest del .exe devolvio $($p.ExitCode)" }
+          if (-not (Select-String -Path $out -Pattern '^OK ' -Quiet)) { throw "El selftest no dijo OK" }
+
+      - name: Revisar que el binario no lleve datos personales
+        shell: pwsh
+        run: |
+          # Un traceback del .exe muestra las rutas con las que se compilo. Si el build se hiciera
+          # en la carpeta personal de alguien, su nombre de usuario viajaria dentro del binario.
+          $texto = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes("dist\LiveVault.exe"))
+          $privados = @($env:GITHUB_WORKSPACE, "OneDrive\Documentos", "OneDrive\Escritorio")
+          $encontrados = @($privados | Where-Object { $_ -and $texto.Contains($_) })
+          if ($encontrados.Count -gt 0) { throw "El .exe contiene rutas personales: $($encontrados -join ', ')" }
+          if ($texto.Contains("C:\Users\")) {
+            Write-Host "::warning::El .exe contiene alguna ruta C:\Users\ (revisa de donde viene)"
+          }
+          "Sin rutas personales conocidas."
+
+      - name: Preparar el archivo y el SHA-256
+        shell: pwsh
+        run: |
+          $v = [regex]::Match((Get-Content app.py -Raw), 'APP_VERSION\s*=\s*"([^"]+)"').Groups[1].Value
+          Copy-Item "dist\LiveVault.exe" "dist\LiveVault-$v.exe"
+          $h = (Get-FileHash "dist\LiveVault-$v.exe" -Algorithm SHA256).Hash.ToLower()
+          "$h  LiveVault-$v.exe" | Set-Content -Encoding ascii "dist\SHA256SUMS.txt"
+          "SHA256: $h"
+
+      - name: Guardar el artefacto (siempre)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: LiveVault-build-${{ github.run_number }}
+          path: |
+            dist/LiveVault-*.exe
+            dist/SHA256SUMS.txt
+            build.log
+          retention-days: 14
+
+      - name: Publicar la Release
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = [regex]::Match((Get-Content app.py -Raw), 'APP_VERSION\s*=\s*"([^"]+)"').Groups[1].Value
+          $cl = Get-Content CHANGELOG.md -Raw
+          $sec = [regex]::Match($cl, '(?ms)^#\s*Cambios de la\s+\S+\s*\r?\n(.*?)(?=^---|\z)')
+          $novedades = if ($sec.Success -and $sec.Groups[1].Value.Trim()) { $sec.Groups[1].Value.Trim() }
+                       else { "Ver CHANGELOG.md." }
+          $notas = @'
+## LiveVault {0}
+
+**Descarga `LiveVault-{0}.exe`** (Windows 10/11 de 64 bits). No hace falta instalar Python.
+
+### Cómo empezar
+
+1. Guarda el `.exe` en una carpeta local, por ejemplo `C:\LiveVault` (mejor fuera de OneDrive).
+2. Doble clic. Si Windows dice "Windows protegió su PC": **Más información → Ejecutar de todas formas** (el .exe no está firmado).
+3. Pega el `@usuario` y espera a que empiece el directo.
+
+Si el antivirus lo bloquea, suele ser un falso positivo de los .exe de PyInstaller: añádelo a las exclusiones.
+
+### Comprobar la descarga
+
+`Get-FileHash LiveVault-{0}.exe -Algorithm SHA256` debe coincidir con `SHA256SUMS.txt`.
+
+### Novedades
+
+{1}
+
+Los datos (usuarios, ajustes y grabaciones) se guardan en la carpeta `datos` junto al .exe.
+'@ -f $v, $novedades
+          $notas | Set-Content -Encoding utf8 "$env:RUNNER_TEMP\notas.md"
+          gh release create "v$v" "dist\LiveVault-$v.exe" "dist\SHA256SUMS.txt" `
+            --title "LiveVault $v" --notes-file "$env:RUNNER_TEMP\notas.md" --verify-tag

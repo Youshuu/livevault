@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # Mantiene al dia las acciones de GitHub que compilan y publican el .exe.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "ci"

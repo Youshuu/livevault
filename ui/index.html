@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="tk-token" content="__TK_TOKEN__">
+<title>LiveVault</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a; --text:#e8eaf0; --muted:#8b93a7;
+  --red:#ff3b57; --orange:#ff9f1a; --green:#2ecc71; --blue:#4c8dff; --amber:#f5b942;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+h1 span{color:var(--red)}
+.chip{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+.chip.ok{color:var(--green);border-color:#25523a}
+.chip.bad{color:var(--amber);border-color:#5a4720}
+.spacer{flex:1}
+.btn{background:var(--panel2);border:1px solid var(--line);padding:8px 14px;border-radius:10px;transition:.15s}
+.btn:hover{border-color:#3a4150;background:#242936}
+.btn.primary{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.small{padding:5px 10px;font-size:13px;border-radius:8px}
+.btn.danger:hover{border-color:var(--red);color:var(--red)}
+.btn:disabled{opacity:.5;cursor:default}
+main{max-width:1200px;margin:0 auto;padding:20px}
+.add{display:flex;gap:10px;margin-bottom:12px}
+.add input{flex:1;min-width:0}
+input[type=text],input[type=number],input[type=password],select{
+  background:var(--panel);border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px;font:inherit;outline:none}
+input:focus,select:focus{border-color:var(--blue)}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 16px}
+.toolbar input[type=text]{flex:1;min-width:170px;padding:8px 12px}
+.toolbar select{padding:8px 10px}
+.counts{color:var(--muted);font-size:13px;margin-left:auto}
+.banner{padding:10px 14px;border-radius:10px;margin-bottom:12px;border:1px solid var(--line);background:var(--panel2);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner.warn{border-color:#5a4720;background:#2a2314;color:var(--amber)}
+.banner.info{border-color:#27406b;background:#15203a;color:#9cc0ff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:10px;position:relative}
+.card.recording{border-color:#6b2431;box-shadow:0 0 0 1px #6b243155,0 6px 24px #ff3b5718}
+.card.live{border-color:#6b4a1b}
+.top{display:flex;align-items:center;gap:10px}
+.avatar{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:20px;background:linear-gradient(135deg,#2b3350,#3b2b50);flex:none;overflow:hidden;border:2px solid var(--line)}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.card.recording .avatar{border-color:#ff3b57}
+.card.live .avatar{border-color:#ff9a3b}
+.who{min-width:0;display:flex;flex-direction:column;gap:1px}
+.name{font-weight:650;font-size:16px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.name:hover{text-decoration:underline}
+.handle{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a.btn{color:inherit;text-decoration:none}
+.thumb{width:112px;height:63px;object-fit:cover;border-radius:6px;background:#14171e;display:block;border:1px solid var(--line)}
+.thumb.none{display:grid;place-items:center;color:var(--muted);font-size:20px}
+.sec{margin:6px 0 -2px;padding-top:10px;border-top:1px solid var(--line);font-weight:650;font-size:13.5px}
+.row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.badge{margin-left:auto;font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:999px;letter-spacing:.4px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.b-recording{background:#3a1520;color:var(--red)}
+.b-live{background:#35260f;color:var(--orange)}
+.b-offline{background:#232733;color:var(--muted)}
+.b-paused{background:#232733;color:var(--muted)}
+.b-error{background:#33280f;color:var(--amber)}
+.b-checking{background:#1b2540;color:#8fb3ff}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.b-recording .dot{animation:pulse 1.1s infinite}
+@keyframes pulse{0%{opacity:1}50%{opacity:.25}100%{opacity:1}}
+.title{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:18px}
+.stats{display:flex;gap:16px;flex-wrap:wrap;font-size:13.5px}
+.stats b{font-variant-numeric:tabular-nums}
+.stat small{display:block;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px}
+.err{color:var(--amber);font-size:12.5px}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.toggle{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--red)}
+.empty{text-align:center;color:var(--muted);padding:60px 10px;border:1px dashed var(--line);border-radius:var(--radius)}
+/* drawer */
+.overlay{position:fixed;inset:0;background:#0009;display:none;z-index:20}
+.overlay.open{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(760px,100%);background:var(--panel);border-left:1px solid var(--line);transform:translateX(100%);transition:.22s;z-index:21;display:flex;flex-direction:column}
+.drawer.open{transform:none}
+.drawer header{position:static}
+.drawer .body{padding:16px 20px;overflow:auto;flex:1}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px;padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:10px 6px;border-bottom:1px solid #20242d;vertical-align:middle;font-variant-numeric:tabular-nums}
+.sessrow td{background:#1b1f28;border-top:1px solid var(--line);padding:8px 6px}
+.sessline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px}
+.sessline b{color:var(--text)}
+.sessline span{color:var(--muted);font-size:12.5px}
+.filerow td{font-size:12.5px;opacity:.92}
+.filerow td:first-child{padding-left:20px}
+.st-done{color:var(--green)} .st-recording{color:var(--red)} .st-processing{color:var(--blue)} .st-error{color:var(--amber)}
+.sum{display:flex;gap:22px;margin-bottom:14px;flex-wrap:wrap}
+.sum div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 14px}
+.sum small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase}
+.jobbox{padding:10px 12px;border:1px solid #27406b;background:#15203a;border-radius:10px;margin-bottom:12px;display:none;flex-direction:column;gap:6px}
+.jobline{font-size:13px;color:#9cc0ff}
+.bar{height:8px;background:var(--panel2);border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--blue);width:0;transition:width .3s}
+/* modal */
+.modal{position:fixed;inset:0;display:none;place-items:center;z-index:30;background:#000a;padding:16px}
+.modal.open{display:grid}
+.mbox{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);width:min(640px,100%);max-height:92vh;display:flex;flex-direction:column}
+.mbox h2{margin:0;font-size:17px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.mbody{padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.mfoot{padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted)}
+label.f input,label.f select{color:var(--text)}
+label.f small{color:var(--muted);font-size:12px}
+details.adv{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+details.adv summary{cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:8px}
+details.adv .mbody{padding:0;gap:12px}
+.secret{display:flex;gap:8px;align-items:center}
+.secret input{flex:1;min-width:0}
+pre{background:#0b0d11;border:1px solid var(--line);border-radius:10px;padding:12px;margin:0;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:340px;overflow:auto;color:#c9d1e3}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:#232733;border:1px solid var(--line);padding:10px 16px;border-radius:10px;opacity:0;transition:.25s;z-index:50;pointer-events:none;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast.bad{border-color:#6b4a1b;color:var(--amber)}
+.vers{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13.5px}
+.vers span:nth-child(odd){color:var(--muted)}
+@media(max-width:560px){header{padding:12px}main{padding:12px}.add{flex-direction:column}.counts{margin-left:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Live<span>Vault</span></h1>
+  <span id="chipVer" class="chip" title="Versión de LiveVault">LiveVault</span>
+  <span id="chipEngine" class="chip">motor…</span>
+  <span id="chipFfmpeg" class="chip">ffmpeg…</span>
+  <span id="chipDisk" class="chip" style="display:none">disco…</span>
+  <div class="spacer"></div>
+  <button class="btn" id="btnFolder">📁 Carpeta</button>
+  <button class="btn" id="btnEngine">⚙️ Motor</button>
+  <button class="btn" id="btnDiag">🩺 Diagnóstico</button>
+  <button class="btn" id="btnSettings">Ajustes</button>
+  <button class="btn danger" id="btnQuit" title="Cierra el programa por completo">⏻ Salir</button>
+</header>
+
+<main>
+  <div id="banners"></div>
+  <form class="add" id="addForm">
+    <input type="text" id="addInput" placeholder="@usuario o enlace de su perfil de TikTok" autocomplete="off" spellcheck="false">
+    <button class="btn primary" type="submit">Agregar usuario</button>
+  </form>
+  <div class="toolbar">
+    <input type="text" id="q" placeholder="Buscar por nick o @usuario" autocomplete="off" spellcheck="false">
+    <select id="filter" title="Filtrar por estado">
+      <option value="all">Todos</option>
+      <option value="live">En vivo</option>
+      <option value="recording">Grabando</option>
+      <option value="problem">Con problema</option>
+      <option value="paused">Pausados</option>
+      <option value="offline">Sin directo</option>
+    </select>
+    <button class="btn small" id="bulkPause" title="Pausar la vigilancia de todos">⏸ Todos</button>
+    <button class="btn small" id="bulkResume" title="Reanudar todos">▶ Todos</button>
+    <span class="counts" id="counts"></span>
+  </div>
+  <div id="grid" class="grid"></div>
+</main>
+
+<!-- directos de un usuario -->
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer">
+  <header>
+    <h1 id="dTitle">Directos</h1>
+    <div class="spacer"></div>
+    <button class="btn small danger" id="dClearAll">🧹 Borrar todas</button>
+    <button class="btn small" id="dFolder">📁 Abrir carpeta</button>
+    <button class="btn small" id="dClose">Cerrar ✕</button>
+  </header>
+  <div class="body">
+    <div class="sum" id="dSum"></div>
+    <div class="jobbox" id="jobBox">
+      <div class="jobline" id="jobLine">Procesando…</div>
+      <div class="bar"><span id="jobBar"></span></div>
+    </div>
+    <table>
+      <thead><tr><th></th><th>Fecha</th><th>Duración</th><th>Peso</th><th>Calidad</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="dRows"></tbody>
+    </table>
+    <div class="empty" id="dEmpty" style="display:none;margin-top:14px">Todavía no hay directos grabados de este usuario.</div>
+  </div>
+</aside>
+
+<!-- ajustes -->
+<div class="modal" id="mSettings"><div class="mbox" style="width:min(680px,100%)">
+  <h2>Ajustes</h2>
+  <div class="mbody">
+    <div class="sec" style="border:0;padding:0">Grabación</div>
+    <label class="f">Carpeta de grabaciones<input type="text" id="sDir"></label>
+    <label class="f">Revisar cada usuario cada (segundos)<input type="number" id="sInterval" min="15" max="3600">
+      <small>Menos segundos = detecta antes el live, pero TikTok puede limitar más. 30–60 es un buen equilibrio;
+      quien lleva horas sin emitir se revisa más despacio.</small></label>
+    <label class="f">Calidad
+      <select id="sQuality"><option value="max">Máxima disponible</option><option value="hd">HD</option><option value="sd">SD (ocupa menos)</option></select></label>
+    <label class="f">Formato final
+      <select id="sFormat"><option value="mp4">MP4 (recomendado)</option><option value="mkv">MKV</option></select>
+      <small>En MP4 se graba directamente en un formato reproducible aunque el programa se cierre de golpe.</small></label>
+
+    <div class="sec">💾 Disco</div>
+    <div class="row2">
+      <label class="f" style="flex:1;min-width:140px">Avisar/pausar si quedan menos de (GB)<input type="number" id="sMinFree" min="0" max="10000"></label>
+      <label class="f" style="flex:1;min-width:140px">No superar (GB en total, 0 = sin límite)<input type="number" id="sMaxTotal" min="0" max="1000000"></label>
+    </div>
+    <label class="f">Borrar grabaciones de más de (días, 0 = nunca)<input type="number" id="sKeepDays" min="0" max="3650">
+      <small>La limpieza se hace sola cada 10 minutos y nunca toca la grabación en curso.</small></label>
+
+    <div class="sec">🔐 Sesión y red</div>
+    <label class="f">sessionid de TikTok (opcional, solo para lives +18)
+      <div class="secret"><input type="password" id="sSession" placeholder="" autocomplete="off">
+        <button class="btn small" type="button" data-clear="session_id" data-input="sSession">Borrar</button>
+        <button class="btn small" type="button" id="btnSessionCheck">Comprobar</button></div>
+      <small id="sSessionNote"></small>
+      <small>Puedes pegar la cookie entera (sessionid=...; tt-target-idc=...): se extrae sola.</small></label>
+    <label class="f">Proxy (opcional)
+      <div class="secret"><input type="text" id="sProxy" placeholder="http://usuario:clave@host:puerto" autocomplete="off">
+        <button class="btn small" type="button" data-clear="proxy" data-input="sProxy">Borrar</button></div>
+      <small id="sProxyNote"></small></label>
+
+    <div class="sec">📱 Avisos al celular</div>
+    <small style="color:var(--muted)">Recibe un aviso en el teléfono cuando alguien entra en vivo, empieza la grabación, se guarda (con miniatura en Telegram), termina el directo (resumen) o hay un problema. Usa ntfy, Telegram, un webhook o varios.</small>
+    <label class="toggle"><input type="checkbox" id="sNotif"> Avisos de Windows: live detectado, grabación iniciada y grabación guardada</label>
+    <label class="f">ntfy · tema (elige un nombre largo e inventado: quien lo conozca recibe tus avisos)
+      <div class="secret"><input type="password" id="sNtfyTopic" placeholder="ej. livevault-9fa3x7kq2m" autocomplete="off">
+        <button class="btn small" type="button" data-clear="push_ntfy_topic" data-input="sNtfyTopic">Borrar</button></div>
+      <small id="sNtfyNote"></small></label>
+    <label class="f">ntfy · servidor
+      <input type="text" id="sNtfyServer" placeholder="https://ntfy.sh" autocomplete="off"></label>
+    <label class="f">Telegram · token del bot (lo da @BotFather al crear un bot con /newbot)
+      <div class="secret"><input type="password" id="sTgToken" placeholder="123456789:AA..." autocomplete="off">
+        <button class="btn small" type="button" data-clear="push_tg_token" data-input="sTgToken">Borrar</button></div>
+      <small id="sTgNote"></small></label>
+    <label class="f">Telegram · chat
+      <div class="row2"><input type="text" id="sTgChat" placeholder="se rellena con «Detectar chat»" autocomplete="off" style="flex:1;min-width:160px">
+        <button class="btn small" type="button" id="btnTgDetect">Detectar chat</button></div>
+      <small>Abre tu bot en Telegram, escríbele /start y pulsa «Detectar chat».</small>
+      <small id="sBotNote" style="color:var(--muted)"></small>
+      <small style="color:var(--muted)">Con el bot activo puedes escribirle desde ese chat: <code>/add</code>,
+        <code>/list</code>, <code>/user</code>, <code>/record</code>, <code>/stop</code>, <code>/last</code>…
+        Escribe <code>/help</code> para ver todo. Solo responde al chat configurado.</small></label>
+    <label class="f">Webhook (opcional: recibe un JSON con title, message y kind)
+      <div class="secret"><input type="password" id="sWebhook" placeholder="https://..." autocomplete="off">
+        <button class="btn small" type="button" data-clear="push_webhook" data-input="sWebhook">Borrar</button></div>
+      <small id="sWebhookNote"></small></label>
+    <div class="checks">
+      <label class="toggle"><input type="checkbox" id="pLive"> 🔴 Alguien en vivo</label>
+      <label class="toggle"><input type="checkbox" id="pRec"> ⏺ Grabación iniciada</label>
+      <label class="toggle"><input type="checkbox" id="pSaved"> ✅ Grabación guardada</label>
+      <label class="toggle"><input type="checkbox" id="pEnded"> 🏁 Directo terminado</label>
+      <label class="toggle"><input type="checkbox" id="pProblem"> ⚠ Problemas</label>
+      <label class="toggle"><input type="checkbox" id="pSession"> 🔑 Sessionid vencida</label>
+    </div>
+    <div class="row2"><button class="btn small" type="button" id="btnPushTest">Guardar y enviar prueba</button><small id="pushRes" style="color:var(--muted)"></small></div>
+
+    <div class="sec">⚙️ Avanzado</div>
+    <details class="adv">
+      <summary>Opciones para casos concretos</summary>
+      <div class="mbody">
+        <label class="f">ffmpeg propio (déjalo vacío para usar el incluido)<input type="text" id="sFfmpeg" placeholder="C:\ruta\ffmpeg.exe"></label>
+        <label class="f">Descartar grabaciones menores de (KB)<input type="number" id="sMinKeep" min="0" max="10000000"></label>
+        <label class="toggle"><input type="checkbox" id="sFallback"> Usar yt-dlp como respaldo si el motor principal no obtiene el stream</label>
+        <label class="toggle"><input type="checkbox" id="sAutoUpd"> Actualizar el motor automáticamente al iniciar el programa</label>
+        <label class="toggle" id="rowAuto" style="display:none"><input type="checkbox" id="sAutostart"> Iniciar con Windows, minimizado en la bandeja (junto al reloj)</label>
+      </div>
+    </details>
+  </div>
+  <div class="mfoot"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="sSave">Guardar</button></div>
+</div></div>
+
+<!-- motor -->
+<div class="modal" id="mEngine"><div class="mbox">
+  <h2>Motor de grabación</h2>
+  <div class="mbody">
+    <div class="vers" id="eVers"></div>
+    <p style="margin:0;color:var(--muted);font-size:13px">Si TikTok cambia algo y dejan de detectarse los lives, normalmente se arregla actualizando el motor.
+      Se descarga la última versión, se comprueba que funciona (incluidas las funciones que usa el programa) y solo entonces reemplaza a la anterior.</p>
+    <pre id="eLog" style="display:none"></pre>
+  </div>
+  <div class="mfoot">
+    <button class="btn" data-close>Cerrar</button>
+    <button class="btn" id="eRestart" style="display:none">Reiniciar ahora</button>
+    <button class="btn primary" id="eUpdate">Buscar y actualizar motor</button>
+  </div>
+</div></div>
+
+<!-- diagnóstico -->
+<div class="modal" id="mDiag"><div class="mbox" style="width:min(860px,100%)">
+  <h2>Diagnóstico y registros</h2>
+  <div class="mbody">
+    <p style="margin:0;color:var(--muted);font-size:13px">Si algo falla, descarga o copia este reporte y compártelo al pedir ayuda. Incluye versiones, ajustes (sin claves) y los últimos errores: las claves, la sessionid y las rutas de tu PC se ocultan automáticamente. <b>Revisa antes el texto si lo vas a publicar</b>: incluye la lista de usuarios que vigilas.</p>
+    <pre id="dText">Cargando…</pre>
+    <div class="row2">
+      <select id="logName">
+        <option value="errores">Errores</option>
+        <option value="actividad">Actividad</option>
+        <option value="motor-pip">Última actualización del motor</option>
+      </select>
+      <button class="btn small" id="logRefresh">Ver últimas líneas</button>
+      <small style="color:var(--muted)">Se redactan solas las claves.</small>
+    </div>
+    <pre id="logText" style="display:none"></pre>
+  </div>
+  <div class="mfoot">
+    <button class="btn" data-close>Cerrar</button>
+    <button class="btn" id="dBackup">Copia de seguridad</button>
+    <a class="btn" id="dSupport" href="/api/support">Paquete de soporte</a>
+    <button class="btn" id="dLogs">Abrir carpeta de logs</button>
+    <button class="btn danger" id="dClear">Vaciar errores</button>
+    <button class="btn" id="dCopy">Copiar</button>
+    <a class="btn primary" id="dDownload" href="/api/report?download=1" style="text-decoration:none">Descargar .txt</a>
+  </div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const TK = (document.querySelector('meta[name="tk-token"]') || {}).content || '';
+const withToken = u => u + (u.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(TK);
+const api = async (path, method = 'GET', body) => {
+  const r = await fetch(withToken(path), {method, headers: {'Content-Type': 'application/json', 'X-TK-Token': TK},
+                               body: body ? JSON.stringify(body) : undefined});
+  let data = {}; try { data = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(data.error || ('Error ' + r.status));
+  return data;
+};
+$('#dSupport').href = withToken('/api/support');
+$('#dDownload').href = withToken('/api/report?download=1');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtBytes = b => { b = +b || 0; if (b < 1024) return b + ' B'; const u = ['KB','MB','GB','TB']; let i = -1;
+  do { b /= 1024; i++; } while (b >= 1024 && i < 3); return b.toFixed(b >= 100 ? 0 : 1) + ' ' + u[i]; };
+const fmtDur = s => { s = Math.round(+s || 0); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return (h ? h + ':' + String(m).padStart(2,'0') : m) + ':' + String(x).padStart(2,'0'); };
+const fmtDate = iso => { const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString('es', {dateStyle:'medium', timeStyle:'short'}); };
+const ago = s => s == null ? '—' : s < 5 ? 'ahora' : s < 90 ? 'hace ' + s + ' s' : 'hace ' + Math.round(s/60) + ' min';
+let toastT; const toast = (m, bad) => { const t = $('#toast'); t.textContent = m; t.className = 'toast show' + (bad ? ' bad' : '');
+  clearTimeout(toastT); toastT = setTimeout(() => t.className = 'toast', 3500); };
+
+const LABEL = {recording:'GRABANDO', live:'EN VIVO', offline:'SIN TRANSMITIR', paused:'PAUSADO', error:'PROBLEMA', checking:'COMPROBANDO'};
+let state = null, openUser = null, lastSig = '', pollTimer = null, polling = false, recsBusy = false, recsCache = [];
+const cleared = new Set();
+
+const matchFilter = u => {
+  const f = $('#filter').value;
+  if (f === 'live' && !(u.live || u.status === 'recording')) return false;
+  if (f === 'recording' && u.status !== 'recording') return false;
+  if (f === 'problem' && u.status !== 'error') return false;
+  if (f === 'paused' && u.enabled) return false;
+  if (f === 'offline' && !(u.status === 'offline' || u.status === 'checking')) return false;
+  return true;
+};
+const matchSearch = u => {
+  const q = $('#q').value.trim().toLowerCase();
+  if (!q) return true;
+  return (u.username || '').toLowerCase().includes(q.replace(/^@/, '')) ||
+         (u.nickname || '').toLowerCase().includes(q.replace(/^@/, ''));
+};
+
+function render() {
+  if (!state) return;
+  const e = state.engine;
+  const chipE = $('#chipEngine');
+  chipE.textContent = e.ok ? 'Motor TikTokLive ' + (e.versions.TikTokLive || '') : 'Motor no instalado';
+  chipE.className = 'chip ' + (e.ok ? 'ok' : 'bad');
+  const chipF = $('#chipFfmpeg'); const fOk = e.ffmpeg && !/no encontrado|error/.test(e.ffmpeg);
+  chipF.textContent = 'ffmpeg ' + (fOk ? e.ffmpeg.split(' ')[0] : 'no encontrado'); chipF.className = 'chip ' + (fOk ? 'ok' : 'bad');
+  const chipD = $('#chipDisk');
+  if (state.disk && state.disk.free_gb != null) {
+    chipD.style.display = '';
+    chipD.textContent = '💾 ' + state.disk.free_gb + ' GB libres';
+    chipD.className = 'chip ' + (state.disk.low ? 'bad' : 'ok');
+  } else { chipD.style.display = 'none'; }
+
+  let b = '';
+  if (!e.ok) b += '<div class="banner warn">El motor no está instalado o no carga. Abre <b>Motor</b> y pulsa «Buscar y actualizar motor».</div>';
+  if (!fOk) b += '<div class="banner warn">No se encuentra ffmpeg, necesario para grabar. Instala <code>imageio-ffmpeg</code> o indica su ruta en Ajustes.</div>';
+  if (state.session && state.session.state === 'expired') b += `<div class="banner warn">🔑 Tu <b>sessionid de TikTok venció</b>${state.session.account ? ` (cookie de <b>@${esc(state.session.account)}</b>)` : ''}: los lives +18 no se podrán grabar. Inicia sesión en TikTok, copia la nueva cookie <code>sessionid</code> y pégala en <b>Ajustes</b>. <button class="btn small" onclick="$('#btnSettings').click()">Abrir Ajustes</button> <button class="btn small" onclick="checkSession(false)">Comprobar ahora</button></div>`;
+  if (state.bot && state.bot.error) b += `<div class="banner warn">🤖 Bot de Telegram: ${esc(state.bot.error)}. Revisa el token en Ajustes.</div>`;
+  if (state.disk && state.disk.low) b += `<div class="banner warn">💾 Quedan ${state.disk.free_gb} GB libres: las grabaciones automáticas están en pausa. Libera espacio o ajusta la retención. <button class="btn small" onclick="$('#btnSettings').click()">Ajustes</button></div>`;
+  if (state.blocked_for > 0) b += `<div class="banner info">TikTok está limitando las consultas. Pausa automática, se reanuda en ${state.blocked_for} s.</div>`;
+  if (e.restart_needed) b += '<div class="banner info">Motor actualizado. <button class="btn small" onclick="doRestart()">Reiniciar para aplicarlo</button></div>';
+  let seen = false; try { seen = localStorage.getItem('hintTray') === '1'; } catch (x) {}
+  if (state.tray && !seen) b += '<div class="banner info">💡 Al cerrar esta ventana el programa <b>sigue grabando desde la bandeja</b> (junto al reloj). Para cerrarlo del todo usa <b>⏻ Salir</b> o clic derecho en su icono → Salir. <button class="btn small" onclick="try{localStorage.setItem(\'hintTray\',\'1\')}catch(x){};state.tray=false;render()">Entendido</button></div>';
+  $('#banners').innerHTML = b;
+
+  const users = state.users.filter(u => matchFilter(u) && matchSearch(u));
+  const all = state.users;
+  const recN = all.filter(u => u.status === 'recording').length;
+  const liveN = all.filter(u => u.live || u.status === 'recording').length;
+  $('#counts').textContent = `${all.length} usuarios · ${liveN} en vivo · ${recN} grabando` +
+    (users.length !== all.length ? ` · mostrando ${users.length}` : '');
+  $('#bulkPause').disabled = !all.some(u => u.enabled);
+  $('#bulkResume').disabled = !all.some(u => !u.enabled);
+
+  const g = $('#grid');
+  if (!all.length) {
+    g.innerHTML = '<div class="empty" style="grid-column:1/-1"><b>Agrega un usuario para empezar.</b><br>' +
+      'Pega su @usuario o el enlace de su perfil. El programa lo vigilará cada pocos minutos y empezará a grabar cuando salga en directo.<br>' +
+      'Si algún día falla, revisa <b>Ajustes</b> y <b>Diagnóstico</b>.</div>';
+    return;
+  }
+  if (!users.length) {
+    g.innerHTML = '<div class="empty" style="grid-column:1/-1">Ningún usuario coincide con la búsqueda o el filtro.</div>';
+    return;
+  }
+  g.innerHTML = users.map(u => {
+    const rec = u.status === 'recording';
+    const stats = rec
+      ? `<div class="stat"><small>Grabando</small><b>${fmtDur(u.rec_seconds)}</b></div>
+         <div class="stat"><small>Peso</small><b>${fmtBytes(u.rec_size)}</b></div>
+         <div class="stat"><small>Calidad</small><b>${esc(u.rec_quality)}</b></div>
+         ${u.rec_bitrate ? `<div class="stat"><small>Bitrate</small><b>${esc(u.rec_bitrate)}</b></div>` : ''}`
+      : `<div class="stat"><small>Revisado</small><b>${ago(u.last_check_ago)}</b></div>
+         <div class="stat"><small>Próxima</small><b>${u.enabled ? (u.next_check_in > 1 ? 'en ' + u.next_check_in + ' s' : 'ahora') : '—'}</b></div>`;
+    const viewers = (u.viewers != null && (u.live || rec)) ? `<div class="stat"><small>Espectadores</small><b>👁 ${u.viewers.toLocaleString('es')}</b></div>` : '';
+    const total = `<div class="stat"><small>Guardado</small><b>${u.total_recordings} · ${fmtBytes(u.total_size)}</b></div>`;
+    return `<div class="card ${u.status}" data-u="${esc(u.username)}">
+      <div class="top"><div class="avatar">${u.avatar ? `<img src="${esc(withToken(u.avatar))}" alt="" onerror="this.replaceWith(document.createTextNode('${esc(u.username[0].toUpperCase())}'))">` : esc(u.username[0].toUpperCase())}</div>
+        <div class="who"><div class="name" data-open="${esc(u.username)}" title="${esc(u.nickname || '@' + u.username)}">${esc(u.nickname || '@' + u.username)}</div>
+          ${u.nickname ? `<div class="handle">@${esc(u.username)}</div>` : ''}</div>
+        <div class="badge b-${u.status}"><span class="dot"></span>${LABEL[u.status]}</div></div>
+      <div class="title">${esc(u.title) || '&nbsp;'}</div>
+      <div class="stats">${viewers}${stats}${total}</div>
+      ${u.error && u.status !== 'recording' ? `<div class="err">⚠ ${esc(u.error)}</div>` : ''}
+      <div class="actions">
+        ${rec ? `<button class="btn small danger" data-act="stop">■ Detener</button>` : `<button class="btn small" data-act="record" ${u.enabled ? '' : 'disabled'}>⏺ Grabar ahora</button>`}
+        <button class="btn small" data-open="${esc(u.username)}">Directos (${u.total_recordings})</button>
+        <button class="btn small" data-act="toggle">${u.enabled ? 'Pausar' : 'Reanudar'}</button>
+        <button class="btn small danger" data-act="del">Eliminar</button>
+      </div>
+      <label class="toggle"><input type="checkbox" data-act="auto" ${u.auto_record ? 'checked' : ''}> Grabar automáticamente</label>
+    </div>`;
+  }).join('');
+}
+
+async function poll() {
+  if (window.__quit) return;
+  if (polling) return;
+  polling = true;
+  try {
+    const data = await api('/api/state');
+    state = data;
+    if (data.app_version) $('#chipVer').textContent = 'LiveVault v' + data.app_version;
+    const sig = JSON.stringify(data);
+    if (sig !== lastSig) { lastSig = sig; render(); }
+    if (openUser && (data.jobs > 0 || (state.users.find(u => u.username === openUser) || {}).status === 'recording')) loadRecs();
+  } catch (e) {
+    $('#banners').innerHTML = '<div class="banner warn">Sin conexión con el programa. Si lo cerraste, vuelve a abrirlo.</div>';
+  } finally {
+    polling = false;
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(poll, document.hidden ? 15000 : 2500);
+  }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+poll();
+
+$('#q').addEventListener('input', render);
+$('#filter').addEventListener('change', render);
+
+$('#addForm').addEventListener('submit', async ev => {
+  ev.preventDefault(); const v = $('#addInput').value.trim(); if (!v) return;
+  try { const r = await api('/api/users', 'POST', {username: v}); $('#addInput').value = ''; toast('@' + r.username + ' agregado'); poll(); }
+  catch (e) { toast(e.message, true); }
+});
+
+async function bulk(pause) {
+  if (!state) return;
+  const targets = state.users.filter(u => pause ? u.enabled : !u.enabled);
+  if (!targets.length) { toast(pause ? 'No hay usuarios activos' : 'No hay usuarios pausados'); return; }
+  if (!confirm((pause ? '¿Pausar' : '¿Reanudar') + ' la vigilancia de ' + targets.length + ' usuario(s)?')) return;
+  for (const u of targets) {
+    try { await api(`/api/users/${u.username}/enabled`, 'POST', {value: !pause}); } catch (e) { toast(e.message, true); break; }
+  }
+  toast(pause ? 'Vigilancia pausada' : 'Vigilancia reanudada'); poll();
+}
+$('#bulkPause').onclick = () => bulk(true);
+$('#bulkResume').onclick = () => bulk(false);
+
+$('#grid').addEventListener('click', async ev => {
+  const open = ev.target.closest('[data-open]'); if (open) return openDrawer(open.dataset.open);
+  const el = ev.target.closest('[data-act]'); if (!el) return;
+  const name = el.closest('.card').dataset.u, act = el.dataset.act;
+  try {
+    if (act === 'record') { el.disabled = true; toast('Comprobando si @' + name + ' está en directo…');
+      const r = await api(`/api/users/${name}/record`, 'POST'); toast(r.msg, !r.ok); }
+    else if (act === 'stop') { el.disabled = true; await api(`/api/users/${name}/stop`, 'POST'); toast('Grabación detenida'); }
+    else if (act === 'toggle') { const u = state.users.find(x => x.username === name); await api(`/api/users/${name}/enabled`, 'POST', {value: !u.enabled}); }
+    else if (act === 'auto') { await api(`/api/users/${name}/auto_record`, 'POST', {value: el.checked}); }
+    else if (act === 'del') {
+      if (!confirm(`¿Quitar a @${name} de la lista?`)) return;
+      const files = confirm('¿Borrar también sus grabaciones del disco?\n\nAceptar = borrar archivos\nCancelar = conservarlos en la carpeta');
+      await api(`/api/users/${name}?delete_files=${files ? 1 : 0}`, 'DELETE'); toast('@' + name + ' eliminado'); }
+    poll();
+  } catch (e) { toast(e.message, true); poll(); }
+});
+
+/* ---- directos grabados ---- */
+function openDrawer(name) {
+  openUser = name;
+  const uu = state && state.users.find(x => x.username === name);
+  $('#dTitle').textContent = 'Directos de ' + (uu && uu.nickname ? uu.nickname + ' (@' + name + ')' : '@' + name);
+  $('#overlay').classList.add('open'); $('#drawer').classList.add('open'); loadRecs();
+}
+function closeDrawer() { openUser = null; $('#overlay').classList.remove('open'); $('#drawer').classList.remove('open'); }
+$('#overlay').onclick = $('#dClose').onclick = closeDrawer;
+$('#dFolder').onclick = async () => { try { const r = await api(`/api/users/${openUser}/open`, 'POST'); if (!r.ok) toast(r.msg, true); } catch (e) { toast(e.message, true); } };
+$('#dClearAll').onclick = async () => {
+  if (!openUser) return;
+  if (!recsCache.length) { toast('No hay grabaciones que borrar'); return; }
+  const favs = recsCache.filter(x => x.favorite).length;
+  const active = recsCache.filter(x => x.status === 'recording' || x.status === 'processing').length;
+  let msg = `¿Borrar todas las grabaciones de @${openUser}?\n\n`;
+  if (favs) msg += `Se conservarán ${favs} marcadas como favoritas.\n`;
+  if (active) msg += `Se omitirán ${active} en curso.\n`;
+  msg += 'No se puede deshacer.';
+  if (!confirm(msg)) return;
+  try {
+    const r = await api(`/api/users/${openUser}/recordings?keep_favorites=1`, 'DELETE');
+    toast(`Borradas ${r.removed} grabaciones` + (r.kept ? ` · ${r.kept} favoritas conservadas` : ''));
+    loadRecs(); poll();
+  } catch (e) { toast(e.message, true); }
+};
+const REC_ST = {done:'Listo', recording:'Grabando', processing:'Procesando', error:'Error'};
+function recRow(x, nested) {
+  const an = x.analyzed_at ? `${x.codec || '?'}${x.width ? ` · ${x.width}×${x.height}` : ''}${x.fps ? ` · ${x.fps} fps` : ''}${+x.frozen_secs >= 20 ? ` · ⚠️ ${fmtDur(x.frozen_secs)} congelado` : ''}` : '';
+  return `<tr class="${nested ? 'filerow' : ''}">
+    <td style="width:120px">${x.thumb ? (x.exists ? `<a href="${withToken('/files/' + x.id)}" target="_blank" title="Reproducir">` : '') + `<img class="thumb" loading="lazy" src="${withToken('/thumbs/' + x.id)}" alt="">` + (x.exists ? '</a>' : '') : '<div class="thumb none">🎞</div>'}</td>
+    <td>${esc(fmtDate(x.started_at))}<div style="color:var(--muted);font-size:11.5px">${esc(x.file)}</div>${an ? `<div style="color:var(--muted);font-size:11px" title="Resultado del análisis guardado">${esc(an)}</div>` : ''}</td>
+    <td>${fmtDur(x.duration_sec)}</td><td>${fmtBytes(x.size_bytes)}</td><td>${esc(x.quality || '')}</td>
+    <td class="st-${x.status}">${REC_ST[x.status] || x.status}${x.note ? `<div style="color:var(--muted);font-size:11.5px">${esc(x.note)}</div>` : ''}</td>
+    <td style="white-space:nowrap">
+      <button class="btn small" data-fav="${x.id}" data-val="${x.favorite ? 1 : 0}" title="${x.favorite ? 'Quitar de favoritas' : 'Marcar como favorita: no se borra al borrar todas'}">${x.favorite ? '★' : '☆'}</button>
+      ${x.exists && x.status === 'recording' ? `<a class="btn small" href="${withToken('/files/' + x.id)}" target="_blank" title="Ver mientras se graba (empieza desde el principio; recarga para seguir)">👁 Ver</a>` : ''}
+      ${x.exists && x.status !== 'recording' ? `<a class="btn small" href="${withToken('/files/' + x.id)}" target="_blank" title="Reproducir">▶</a> <a class="btn small" href="${withToken('/files/' + x.id + '?dl=1')}" title="Descargar">⬇</a>` : (x.exists ? '' : '<span style="color:var(--muted);font-size:12px">archivo no encontrado</span>')}
+      ${x.exists && x.status !== 'recording' ? `<button class="btn small" data-an="${x.id}" title="Analizar el video (detecta tramos congelados)">🔍</button>` : ''}
+      ${x.exists && x.status === 'done' ? `<button class="btn small" data-fix="${x.id}" title="Crear una copia reparada (regenera las marcas de tiempo)">🛠</button>` : ''}
+      ${x.status !== 'recording' ? `<button class="btn small danger" data-del="${x.id}" title="Borrar">🗑</button>` : ''}</td></tr>`;
+}
+
+async function loadRecs() {
+  if (!openUser || recsBusy) return;
+  const who = openUser;
+  recsBusy = true;
+  let data; try { data = await api(`/api/users/${who}/recordings`); } catch (e) { recsBusy = false; return; }
+  if (who !== openUser) { recsBusy = false; return; }
+  const r = data.recordings || [];
+  recsCache = r;
+  const sessions = data.sessions && data.sessions.length ? data.sessions
+    : r.map(x => ({id:'', files:[x], count:1, started_at:x.started_at, duration_sec:x.duration_sec,
+                   size_bytes:x.size_bytes, status:x.status, can_merge:false}));
+  const done = sessions.filter(s => s.status === 'done');
+  $('#dSum').innerHTML =
+    `<div><small>Directos</small><b>${done.length}</b></div>` +
+    `<div><small>Archivos</small><b>${r.length}</b></div>` +
+    `<div><small>Duración total</small><b>${fmtDur(done.reduce((a, s) => a + s.duration_sec, 0))}</b></div>` +
+    `<div><small>Peso total</small><b>${fmtBytes(done.reduce((a, s) => a + s.size_bytes, 0))}</b></div>`;
+  $('#dEmpty').style.display = r.length ? 'none' : 'block';
+  $('#dRows').innerHTML = sessions.map(s => {
+    if (s.count <= 1) return recRow(s.files[0], false);
+    const head = `<tr class="sessrow"><td colspan="7"><div class="sessline">
+      <b>🎬 Directo</b><span>${esc(fmtDate(s.started_at))}</span>
+      <span>${s.count} archivos · ${fmtDur(s.duration_sec)} · ${fmtBytes(s.size_bytes)}</span>
+      <span class="spacer"></span>
+      ${s.can_merge ? `<button class="btn small" data-merge="${s.id}" data-count="${s.count}" title="Unir los trozos en un solo archivo, sin recodificar">🔗 Unir</button>`
+                    : `<span>${s.status === 'done' ? 'no se puede unir' : 'en curso'}</span>`}
+      </div></td></tr>`;
+    return head + s.files.map(f => recRow(f, true)).join('');
+  }).join('');
+  recsBusy = false;
+}
+$('#dRows').addEventListener('click', async ev => {
+  const fav = ev.target.closest('[data-fav]');
+  if (fav) {
+    const value = fav.dataset.val !== '1';
+    fav.disabled = true;
+    try {
+      await api('/api/recordings/' + fav.dataset.fav + '/favorite', 'POST', {value});
+      toast(value ? '★ Marcada como favorita' : '☆ Ya no es favorita');
+      loadRecs();
+    } catch (e) { toast(e.message, true); fav.disabled = false; }
+    return;
+  }
+  const mg = ev.target.closest('[data-merge]');
+  if (mg) { mergeSession(mg.dataset.merge, +mg.dataset.count); return; }
+  const an = ev.target.closest('[data-an]');
+  if (an) {
+    an.disabled = true; toast('Analizando el video…');
+    try {
+      const r = await api('/api/recordings/' + an.dataset.an + '/analyze', 'POST');
+      const t = s => fmtDur(s);
+      const lines = [`Códec: ${r.codec} · ${r.size} · ${r.fps} fps · ${r.frames} fotogramas`,
+        `Tiempos: ${r.ts_bad ? '⚠ IRREGULARES' : 'normales'} · retrocesos ${r.ts_backwards} · hueco máx. ${(+r.ts_maxgap).toFixed(1)} s · desfase audio/video ${(+r.av_start).toFixed(1)} → ${(+r.av_end).toFixed(1)} s`,
+        r.frames === 0 ? 'No tiene pista de video.' :
+        r.freezes.length ? `Imagen congelada ${t(r.frozen_secs)} de ${t(r.duration)}:\n` + r.freezes.map(f => `  ${t(f[0])} → ${t(f[1])}`).join('\n')
+                         : 'La imagen no se congela en ningún momento.'];
+      alert(lines.join('\n'));
+      loadRecs();
+    } catch (e) { toast(e.message, true); }
+    an.disabled = false; return;
+  }
+  const fx = ev.target.closest('[data-fix]');
+  if (fx) {
+    if (!confirm('Se creará una COPIA reparada (el original no se toca). Recodifica el video, así que puede tardar varios minutos en directos largos y usa CPU.\n\nNo cierres el programa hasta que termine. ¿Continuar?')) return;
+    try {
+      const r = await api('/api/recordings/' + fx.dataset.fix + '/repair', 'POST');
+      showJob(r.job);
+    } catch (e) { toast(e.message, true); }
+    return;
+  }
+  const b = ev.target.closest('[data-del]'); if (!b) return;
+  if (!confirm('¿Borrar esta grabación del disco? No se puede deshacer.')) return;
+  try { await api('/api/recordings/' + b.dataset.del, 'DELETE'); toast('Grabación borrada'); loadRecs(); poll(); } catch (e) { toast(e.message, true); }
+});
+
+async function showJob(id) {
+  const box = $('#jobBox'); box.style.display = 'flex';
+  $('#jobBar').style.width = '0%';
+  for (;;) {
+    let j; try { j = await api('/api/jobs/' + id); } catch (e) { box.style.display = 'none'; return; }
+    $('#jobLine').textContent = j.message || 'Procesando…';
+    $('#jobBar').style.width = Math.round((j.progress || 0) * 100) + '%';
+    if (j.state !== 'running') {
+      if (j.state === 'done') { toast(j.message || 'Trabajo terminado'); loadRecs(); poll(); }
+      else { toast(j.error || 'No se pudo completar', true); }
+      setTimeout(() => { box.style.display = 'none'; }, 4000);
+      return;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+
+async function mergeSession(sid, count) {
+  if (!sid) return;
+  if (!confirm(`Se unirán ${count} archivos en uno solo, sin recodificar.\n\nPuede tardar desde unos segundos hasta un par de minutos según el tamaño. ¿Continuar?`)) return;
+  const del = confirm('¿Borrar los archivos originales al terminar?\n\nAceptar = borrar los trozos (libera espacio)\nCancelar = conservarlos');
+  try {
+    const r = await api(`/api/sessions/${sid}/merge`, 'POST', {delete_originals: del});
+    showJob(r.job);
+  } catch (e) { toast(e.message, true); }
+}
+
+/* ---- modales ---- */
+const openModal = id => $(id).classList.add('open');
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', ev => { if (ev.target === m || ev.target.hasAttribute('data-close')) m.classList.remove('open'); }));
+$('#btnQuit').onclick = async () => {
+  const rec = state && state.users.some(u => u.status === 'recording');
+  const msg = (rec ? 'Hay grabaciones en curso: se guardarán antes de cerrar.\n\n' : '') +
+    '¿Cerrar el programa por completo?\n\nSi solo quieres ocultar esta ventana, ciérrala con la X: seguirá funcionando desde la bandeja.';
+  if (!confirm(msg)) return;
+  window.__quit = true;
+  try { await api('/api/quit', 'POST'); } catch (e) {}
+  document.body.innerHTML = '<div style="display:grid;place-items:center;height:100vh;text-align:center;color:#8b93a7;font:16px system-ui"><div><div style="font-size:44px">⏻</div>Programa cerrado.<br>Ya puedes cerrar esta ventana.</div></div>';
+  setTimeout(() => { try { window.close(); } catch (e) {} }, 1500);
+};
+$('#btnFolder').onclick = async () => { try { const r = await api('/api/open_folder', 'POST'); if (!r.ok) toast(r.msg, true); } catch (e) { toast(e.message, true); } };
+
+const resetClearButtons = () => {
+  document.querySelectorAll('[data-clear]').forEach(b => { b.disabled = false; b.textContent = 'Borrar'; });
+  cleared.clear();
+};
+document.querySelectorAll('[data-clear]').forEach(b => b.onclick = () => {
+  const k = b.dataset.clear, input = $('#' + b.dataset.input);
+  if (input) input.value = '';
+  cleared.add(k); b.disabled = true; b.textContent = 'Se borrará';
+});
+
+$('#btnSettings').onclick = async () => {
+  const s = await api('/api/settings');
+  resetClearButtons();
+  $('#sDir').value = s.output_dir; $('#sInterval').value = s.check_interval; $('#sQuality').value = s.quality; $('#sFormat').value = s.final_format;
+  $('#sMinFree').value = s.min_free_gb; $('#sMaxTotal').value = s.max_total_gb; $('#sKeepDays').value = s.retention_days;
+  $('#sMinKeep').value = s.min_keep_kb; $('#sFfmpeg').value = s.ffmpeg_path;
+  $('#sSession').value = ''; $('#sProxy').value = ''; $('#sWebhook').value = '';
+  const acct = state && state.session && state.session.account ? ` Cuenta: @${state.session.account}.` : '';
+  $('#sSessionNote').textContent = (s.session_id_set ? 'Hay una sessionid guardada. Déjalo vacío para conservarla, o escribe otra para reemplazarla.' : 'Sin configurar.') + acct;
+  $('#sProxyNote').textContent = s.proxy_set ? 'Hay un proxy guardado. Déjalo vacío para conservarlo.' : 'Sin configurar.';
+  $('#sWebhookNote').textContent = s.push_webhook_set ? 'Hay un webhook guardado. Déjalo vacío para conservarlo.' : 'Sin configurar.';
+  $('#sFallback').checked = s.ytdlp_fallback === '1'; $('#sAutoUpd').checked = s.auto_update_on_start === '1';
+  $('#sNotif').checked = s.notifications === '1';
+  $('#sNtfyTopic').value = ''; $('#sTgToken').value = ''; $('#pushRes').textContent = '';
+  $('#sNtfyServer').value = s.push_ntfy_server; $('#sTgChat').value = s.push_tg_chat;
+  $('#sNtfyNote').textContent = s.push_ntfy_topic_set ? 'Hay un tema guardado. Déjalo vacío para conservarlo.' : 'Sin configurar. En el celular instala la app «ntfy» y suscríbete a ese mismo tema.';
+  $('#sTgNote').textContent = s.push_tg_token_set ? 'Hay un token guardado. Déjalo vacío para conservarlo.' : 'Sin configurar.';
+  const b = state && state.bot;
+  $('#sBotNote').textContent = !s.push_tg_token_set ? 'Sin token: el bot no escucha órdenes.'
+    : (b && b.running ? 'El bot está escuchando; prueba a escribirle /help desde Telegram.'
+       : (b && b.error ? 'El bot no puede escuchar: ' + b.error
+          : 'El bot está configurado; se inicia al guardar o al arrancar el programa.'));
+  $('#pLive').checked = s.push_live === '1'; $('#pRec').checked = s.push_recording === '1'; $('#pSaved').checked = s.push_saved === '1';
+  $('#pEnded').checked = s.push_ended === '1';
+  $('#pProblem').checked = s.push_problem === '1'; $('#pSession').checked = s.push_session === '1';
+  $('#rowAuto').style.display = s.autostart_supported ? '' : 'none'; $('#sAutostart').checked = !!s.autostart;
+  openModal('#mSettings');
+};
+async function saveSettings() {
+  const body = {push_ntfy_topic: $('#sNtfyTopic').value, push_ntfy_server: $('#sNtfyServer').value,
+    push_tg_token: $('#sTgToken').value, push_tg_chat: $('#sTgChat').value, push_webhook: $('#sWebhook').value,
+    push_live: $('#pLive').checked, push_recording: $('#pRec').checked,
+    push_saved: $('#pSaved').checked, push_problem: $('#pProblem').checked, push_session: $('#pSession').checked,
+    push_ended: $('#pEnded').checked,
+    output_dir: $('#sDir').value, check_interval: $('#sInterval').value, quality: $('#sQuality').value,
+    final_format: $('#sFormat').value, session_id: $('#sSession').value, proxy: $('#sProxy').value,
+    min_free_gb: $('#sMinFree').value, max_total_gb: $('#sMaxTotal').value, retention_days: $('#sKeepDays').value,
+    min_keep_kb: $('#sMinKeep').value, ffmpeg_path: $('#sFfmpeg').value,
+    ytdlp_fallback: $('#sFallback').checked, auto_update_on_start: $('#sAutoUpd').checked,
+    notifications: $('#sNotif').checked,
+    ...($('#rowAuto').style.display === 'none' ? {} : {autostart: $('#sAutostart').checked})};
+  for (const k of cleared) body[k + '_clear'] = true;
+  await api('/api/settings', 'POST', body);
+  cleared.clear();
+  $('#sNtfyTopic').value = ''; $('#sTgToken').value = ''; $('#sSession').value = ''; $('#sProxy').value = ''; $('#sWebhook').value = '';
+  resetClearButtons();
+  const s = await api('/api/settings');
+  $('#sSessionNote').textContent = s.session_id_set ? 'Hay una sessionid guardada.' : 'Sin configurar.';
+  $('#sProxyNote').textContent = s.proxy_set ? 'Hay un proxy guardado.' : 'Sin configurar.';
+  $('#sWebhookNote').textContent = s.push_webhook_set ? 'Hay un webhook guardado.' : 'Sin configurar.';
+}
+$('#sSave').onclick = async () => {
+  try { await saveSettings(); $('#mSettings').classList.remove('open'); toast('Ajustes guardados'); poll(); }
+  catch (e) { toast(e.message, true); }
+};
+async function checkSession(saveFirst) {
+  if (saveFirst) {
+    try { await saveSettings(); } catch (e) { toast(e.message, true); return; }
+  }
+  try {
+    const r = await api('/api/session/check', 'POST');
+    if (r.account) {
+      $('#sSessionNote').textContent = `Cuenta: @${r.account}. ` +
+        (r.state === 'ok' ? 'La sesión está correcta.' : (r.state === 'expired' ? 'La cookie parece vencida.' : 'No se pudo confirmar.'));
+    }
+    if (r.state === 'ok') toast(`✅ Sesión correcta${r.account ? ' (@' + r.account + ')' : ''}`);
+    else if (r.state === 'expired') toast(`🔑 La sessionid venció${r.account ? ' (@' + r.account + ')' : ''}`, true);
+    else if (r.state === 'none') toast('No hay sessionid guardada', true);
+    else toast('No se pudo comprobar ahora; se reintentará', true);
+    await poll();
+  } catch (e) { toast(e.message, true); }
+}
+$('#btnSessionCheck').onclick = () => checkSession(true);
+$('#btnTgDetect').onclick = async () => {
+  try {
+    await saveSettings();
+    const r = await api('/api/push/tg-detect', 'POST');
+    if (!confirm('¿Autorizar los comandos desde «' + (r.name || '') + '» (' + r.chat_id + ')?\n\n' +
+                 'Solo ese chat podrá darme órdenes. Si no eres tú, pulsa Cancelar.')) {
+      $('#sTgChat').value = '';
+      toast('Chat no autorizado');
+      return;
+    }
+    $('#sTgChat').value = r.chat_id;
+    await saveSettings();
+    toast('Chat detectado: ' + (r.name || r.chat_id));
+  } catch (e) { toast(e.message, true); }
+};
+$('#btnPushTest').onclick = async () => {
+  $('#pushRes').textContent = 'Enviando…';
+  try { await saveSettings(); const r = (await api('/api/push/test', 'POST')).results;
+    $('#pushRes').textContent = Object.entries(r).map(([k, v]) => k + ': ' + (v === 'ok' ? 'enviado ✓' : 'falló (' + v + ')')).join('   ');
+  } catch (e) { $('#pushRes').textContent = ''; toast(e.message, true); }
+};
+
+let engPoll;
+async function refreshEngine() {
+  const d = await api('/api/engine');
+  $('#eVers').innerHTML = Object.entries(d.versions).map(([k, v]) => `<span>${esc(k)}</span><span>${v ? esc(v) : 'no instalado'}</span>`).join('');
+  const log = $('#eLog'); if (d.lines.length) { log.style.display = 'block'; log.textContent = d.lines.join('\n'); log.scrollTop = log.scrollHeight; }
+  $('#eUpdate').disabled = d.running; $('#eUpdate').textContent = d.running ? 'Actualizando…' : 'Buscar y actualizar motor';
+  $('#eRestart').style.display = d.restart_needed ? '' : 'none';
+  if (!d.running) { clearInterval(engPoll); engPoll = null; }
+}
+$('#btnEngine').onclick = async () => { openModal('#mEngine'); await refreshEngine(); };
+$('#eUpdate').onclick = async () => {
+  try { await api('/api/engine/update', 'POST'); $('#eLog').style.display = 'block'; $('#eLog').textContent = 'Iniciando…';
+    if (!engPoll) engPoll = setInterval(refreshEngine, 1200); refreshEngine(); } catch (e) { toast(e.message, true); }
+};
+async function doRestart() {
+  const rec = state && state.users.some(u => u.status === 'recording');
+  if (rec && !confirm('Hay grabaciones en curso. Se cerrarán correctamente y se reanudarán al reiniciar si el usuario sigue en directo.\n\n¿Reiniciar ahora?')) return;
+  try { await api('/api/restart', 'POST'); } catch (e) {}
+  toast('Reiniciando…'); setTimeout(() => location.reload(), 6000);
+}
+$('#eRestart').onclick = doRestart;
+
+$('#btnDiag').onclick = async () => { openModal('#mDiag'); $('#dText').textContent = 'Cargando…';
+  try { $('#dText').textContent = (await api('/api/report')).report; } catch (e) { $('#dText').textContent = e.message; } };
+$('#dCopy').onclick = async () => { try { await navigator.clipboard.writeText($('#dText').textContent); toast('Reporte copiado'); }
+  catch (e) { const r = document.createRange(); r.selectNode($('#dText')); getSelection().removeAllRanges(); getSelection().addRange(r); toast('Selecciónalo y copia con Ctrl+C'); } };
+$('#dLogs').onclick = async () => { try { const r = await api('/api/open_logs', 'POST'); if (!r.ok) toast(r.msg, true); } catch (e) { toast(e.message, true); } };
+$('#dClear').onclick = async () => { if (!confirm('¿Vaciar el log de errores?')) return; await api('/api/log/clear', 'POST'); $('#dText').textContent = (await api('/api/report')).report; toast('Log de errores vaciado'); };
+$('#dBackup').onclick = async () => {
+  try {
+    const r = await api('/api/backup', 'POST');
+    toast('Copia creada: ' + r.file + ' · ' + fmtBytes(r.size));
+    $('#dText').textContent = (await api('/api/report')).report;
+  } catch (e) { toast(e.message, true); }
+};
+$('#logRefresh').onclick = async () => {
+  const pre = $('#logText'); pre.style.display = 'block'; pre.textContent = 'Cargando…';
+  try { const r = await api('/api/logs?name=' + encodeURIComponent($('#logName').value) + '&lines=250');
+    pre.textContent = r.text || '(vacío)'; pre.scrollTop = pre.scrollHeight; }
+  catch (e) { pre.textContent = e.message; }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+name: Sugerencia
+description: Una idea para mejorar el programa
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Qué propones
+      description: Qué problema resolvería y para quién.
+    validations:
+      required: true
+  - type: textarea
+    id: como
+    attributes:
+      label: Cómo lo imaginas (opcional)
+      description: Si se te ocurre cómo debería verse o comportarse.
+  - type: markdown
+    attributes:
+      value: |
+        Ten en cuenta que el programa es un único archivo (`app.py` + panel en `ui/index.html`) y
+        que se evitan dependencias nuevas para no engordar el `.exe`.

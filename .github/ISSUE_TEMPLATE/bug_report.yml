@@ -1,0 +1,50 @@
+name: Informe de fallo
+description: Algo no funciona como debería
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de seguir, prueba **Motor → Buscar y actualizar motor**: TikTok cambia su API a menudo
+        y muchos fallos de detección se arreglan así.
+
+        **No pegues** tu `sessionid`, el token del bot ni capturas con tu nombre de usuario de Windows.
+  - type: input
+    id: version
+    attributes:
+      label: Versión de LiveVault
+      description: Chip de la cabecera del panel, o `LiveVault.exe --version`.
+      placeholder: 1.8.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows
+      placeholder: Windows 11 23H2 (x64)
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Qué haces y qué pasa
+      description: Los pasos para reproducirlo, lo que esperabas y lo que ocurre.
+      placeholder: |
+        1. Añado @usuario
+        2. Empieza el directo
+        3. El panel dice "en vivo" pero no graba
+    validations:
+      required: true
+  - type: textarea
+    id: reporte
+    attributes:
+      label: Reporte de diagnóstico
+      description: |
+        Panel → 🩺 Diagnóstico → Descargar .txt. Oculta claves y rutas, pero **revísalo** antes de
+        pegarlo: incluye la lista de usuarios que vigilas.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Capturas o logs (opcional)
+      description: Arrastra imágenes aquí o pega las últimas líneas de `datos/logs/errores.log`.

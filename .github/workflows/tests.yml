@@ -1,0 +1,47 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["v*"]        # los tags los valida el workflow de release
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-build.txt
+            constraints.txt
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install -r requirements.txt -r requirements-build.txt -c constraints.txt
+          python -m pip install "ruff>=0.11,<1"
+
+      - name: Ruff (solo errores graves)
+        run: python -m ruff check .
+
+      - name: Pruebas
+        run: python -m unittest discover -s tests -v
+
+      - name: Smoke de la API
+        run: python tests/smoke_api.py
