@@ -1,8 +1,8 @@
-blank_issues_enabled: false
+﻿blank_issues_enabled: false
 contact_links:
-  - name: 🔒 Problema de seguridad
-    url: https://github.com/OWNER/REPO/security/advisories/new
-    about: No abras un issue público con vulnerabilidades. Usa el reporte privado.
-  - name: 📖 Manual completo
-    url: https://github.com/OWNER/REPO/blob/main/LEEME.md
-    about: Antes de preguntar, mira el manual y la sección de problemas frecuentes.
+  - name: ðŸ”’ Problema de seguridad
+    url: https://github.com/Youshuu/livevault/security/advisories/new
+    about: No abras un issue pÃºblico con vulnerabilidades. Usa el reporte privado.
+  - name: ðŸ“– Manual completo
+    url: https://github.com/Youshuu/livevault/blob/main/LEEME.md
+    about: Antes de preguntar, mira el manual y la secciÃ³n de problemas frecuentes.
