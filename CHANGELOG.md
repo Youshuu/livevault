@@ -1,3 +1,35 @@
+# Cambios de la 1.8.3
+
+Arreglos a partir de un diagnóstico real (27/11/2026): TikTok dejó de devolver JSON durante una hora
+y una grabación quedó con casi tres minutos de audio sin imagen.
+
+## Cuando TikTok deja de responder
+
+- Una respuesta **vacía o una página HTML** (lo que hace TikTok cuando frena las consultas) ya no se
+  trata como un fallo puntual de cada usuario: se clasifica como límite temporal y se aplica una
+  **pausa global**. Antes cada usuario reintentaba cada ~20 s por su cuenta, se reabrían los clientes
+  y el bloqueo podía durar horas; ahora se espera 1, 2, 4, 8 y hasta 15 minutos entre intentos.
+- Las consultas se reparten (0,35 s de separación mínima) para que 11 usuarios no salgan en ráfaga.
+- Durante la pausa **no se marca a cada usuario en rojo**: el panel muestra un solo aviso y los
+  contadores de fallo se reinician al volver la conexión.
+- El registro guarda el cuerpo de la respuesta cuando el JSON no se puede leer, para diagnosticar.
+
+## Grabaciones sin imagen al final
+
+- El análisis distingue «marcas de tiempo irregulares» de «el video terminó antes que el audio».
+  El aviso ahora dice cuánto metraje no tiene imagen en lugar del confuso «hueco 0 s».
+- **🛠 ya no recodifica de más**: si el video se cortó antes que el audio, recorta el final sin
+  imagen con copia directa (segundos, sin perder calidad). Si hay que regenerar tiempos, usa los fps
+  reales del tramo de video, no `fotogramas / duración total` (que dejaba el video ~9 % lento).
+
+## Avisos
+
+- Después de una grabación correcta ya no sale «⚠ No se pudo grabar» por un fallo del monitor de
+  estado: cada grabación lleva su propio error y solo avisa de lo que le pasó a ella.
+- El botón 🛠 explica en el panel si va a recortar (rápido) o recodificar (lento).
+
+---
+
 # Cambios de la 1.8.2
 
 Actualizaciones desde el propio programa.

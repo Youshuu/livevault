@@ -53,7 +53,7 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
-APP_VERSION = "1.8.2"
+APP_VERSION = "1.8.3"
 FROZEN = bool(getattr(sys, "frozen", False))
 WIN = os.name == "nt"
 NO_WINDOW = 0x08000000 if WIN else 0
@@ -957,6 +957,7 @@ class EngineError(Exception):
     def __init__(self, kind: str, msg: str):
         super().__init__(msg)
         self.kind = kind
+        self.paused = False        # True si no se consulto porque la pausa global estaba activa
 
 
 class NetGate:
@@ -983,8 +984,10 @@ class NetGate:
 
     async def __aenter__(self) -> "NetGate":
         if self.blocked_for() > 0:
-            raise EngineError("blocked", "TikTok esta limitando las consultas; se reanuda en "
+            err = EngineError("blocked", "TikTok esta limitando las consultas; se reanuda en "
                                          f"{int(self.blocked_for())} s.")
+            err.paused = True
+            raise err
         await self._semaphore().acquire()
         if self._min_gap:
             wait = self._last + self._min_gap - time.time()
@@ -997,7 +1000,7 @@ class NetGate:
         self._semaphore().release()
 
 
-GATE = NetGate(4)
+GATE = NetGate(4, 0.35)      # separacion minima: 11 usuarios a la vez no deben salir en rafaga
 
 
 class LiveStatus:
@@ -1231,10 +1234,19 @@ def _framecrc_stats(exe: str, video: Path, budget: int) -> Optional[dict]:
     ai = next((i for i, k in kind.items() if k == "audio"), None)
     frames = counts.get(vi, 0) if vi is not None else 0
     stats: dict = {"frames": frames, "ts_backwards": backwards, "ts_maxgap": maxgap,
-                   "av_start": 0.0, "av_end": 0.0, "ts_bad": False}
+                   "av_start": 0.0, "av_end": 0.0, "ts_bad": False,
+                   "video_end": 0.0, "audio_end": 0.0, "video_span": 0.0, "video_fps": 0.0,
+                   "tail_secs": 0.0}
     if vi is not None and ai is not None:
         stats["av_start"] = first[vi] - first[ai]
         stats["av_end"] = last[vi] - last[ai]
+        stats["video_end"], stats["audio_end"] = last[vi], last[ai]
+        # el video termino antes que el audio: TikTok dejo de mandar imagen y el resto es audio solo
+        stats["tail_secs"] = max(0.0, last[ai] - last[vi])
+    if vi is not None:
+        stats["video_span"] = max(0.0, last[vi] - first[vi])
+        if frames and stats["video_span"] > 0.5:
+            stats["video_fps"] = frames / stats["video_span"]
     stats["ts_bad"] = bool(frames) and (
         backwards > 5 or maxgap > 8
         or abs(stats["av_end"] - stats["av_start"]) > 3 or abs(stats["av_start"]) > 5)
@@ -1252,7 +1264,9 @@ def analyze_video(exe: str, video: Path, duration: float) -> dict:
     """
     res: dict = {"codec": "?", "size": "?", "fps": "?", "frames": None, "frozen": False,
                  "freezes": [], "frozen_secs": 0.0, "ts_backwards": 0, "ts_maxgap": 0.0,
-                 "av_start": 0.0, "av_end": 0.0, "ts_bad": False}
+                 "av_start": 0.0, "av_end": 0.0, "ts_bad": False,
+                 "video_end": 0.0, "audio_end": 0.0, "video_span": 0.0, "video_fps": 0.0,
+                 "tail_secs": 0.0}
     err = ""
     try:
         r = sp_run([exe, "-hide_banner", "-i", str(video)], capture_output=True, text=True,
@@ -1325,20 +1339,33 @@ def analysis_fields(h: dict) -> tuple:
 
 
 def repair_video(exe: str, src: Path, dst: Path, frames: int, duration: float,
-                 progress=None) -> bool:
-    """Copia con las marcas de tiempo regeneradas (video a ritmo constante, audio re-sincronizado).
-    Recodifica el video, asi que tarda; el original no se toca. `progress(fraccion, segundos)`
-    permite mostrar el avance real."""
-    fps = frames / duration if frames and duration else 24.0
+                 progress=None, video_secs: float = 0.0, tail_secs: float = 0.0) -> bool:
+    """Copia sincronizada del video, sin tocar el original.
+
+    - Si el video termina antes que el audio (`tail_secs`, TikTok dejo de mandar imagen), se
+      recorta el final sin imagen con copia directa: rapido y sin perder calidad.
+    - Si no, se recodifica el video a ritmo constante usando los fps reales del tramo de video.
+      Antes se usaba `frames / duracion total`: con audio de mas el video salia ~9 % lento y
+      seguia desincronizado. `progress(fraccion, segundos)` permite mostrar el avance real.
+    """
+    span = video_secs if video_secs > 1 else duration
+    fps = frames / span if frames and span else 24.0
     fps = max(10.0, min(60.0, fps))
     tmp = dst.with_name(dst.stem + ".tmp.mp4")
     tmp.unlink(missing_ok=True)
-    cmd = [exe, "-hide_banner", "-nostats", "-loglevel", "error", "-y", "-i", str(src),
-           "-map", "0:v:0", "-map", "0:a:0?",
-           "-vf", f"setpts=N/({fps:.4f}*TB)", "-r", f"{fps:.3f}",
-           "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p",
-           "-c:a", "aac", "-b:a", "128k", "-af", "aresample=async=1:first_pts=0",
-           "-movflags", "+faststart", "-progress", "pipe:1", str(tmp)]
+    trim = tail_secs > 3 and span > 1
+    if trim:
+        cmd = [exe, "-hide_banner", "-nostats", "-loglevel", "error", "-y", "-i", str(src),
+               "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy",
+               "-t", f"{max(0.0, span - 0.05):.3f}", "-movflags", "+faststart",
+               "-progress", "pipe:1", str(tmp)]
+    else:
+        cmd = [exe, "-hide_banner", "-nostats", "-loglevel", "error", "-y", "-i", str(src),
+               "-map", "0:v:0", "-map", "0:a:0?",
+               "-vf", f"setpts=N/({fps:.4f}*TB)", "-r", f"{fps:.3f}",
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p",
+               "-c:a", "aac", "-b:a", "128k", "-af", "aresample=async=1:first_pts=0",
+               "-shortest", "-movflags", "+faststart", "-progress", "pipe:1", str(tmp)]
     tail: collections.deque = collections.deque(maxlen=30)
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -1363,16 +1390,17 @@ def repair_video(exe: str, src: Path, dst: Path, frames: int, duration: float,
 
     threading.Thread(target=drain, daemon=True, name="repair-err").start()
     rc = -1
+    total = span if trim else duration
     try:
         assert proc.stdout is not None
         for l in proc.stdout:
             k, _, v = l.strip().partition("=")
-            if k in ("out_time_us", "out_time_ms") and progress and duration:
+            if k in ("out_time_us", "out_time_ms") and progress and total:
                 try:
                     secs = int(v) / 1e6
                 except ValueError:
                     continue
-                progress(min(0.99, max(0.0, secs / duration)), secs)
+                progress(min(0.99, max(0.0, secs / total)), secs)
         rc = proc.wait()
     finally:
         timer.cancel()
@@ -1389,7 +1417,7 @@ def repair_video(exe: str, src: Path, dst: Path, frames: int, duration: float,
         return False
     os.replace(tmp, dst)
     if progress:
-        progress(1.0, duration or 0.0)
+        progress(1.0, total or 0.0)
     return True
 
 
@@ -1594,6 +1622,14 @@ def classify_exception(e: Exception) -> EngineError:
     if (name.startswith("Signature") or name in ("WebcastBlockedError", "SignAPIError")
             or "429" in low or "403" in low or "blocked" in low or "captcha" in low):
         return EngineError("blocked", f"TikTok limita las consultas ({name}). Se reintentara mas despacio.")
+    if name == "JSONDecodeError":
+        # Cuerpo vacio o una pagina HTML no es un fallo puntual de un usuario: TikTok esta
+        # frenando las consultas (anti-bot). Asi se aplica la pausa global en vez de seguir
+        # preguntando cada 20 s a todos los usuarios y alargar el bloqueo durante horas.
+        body = getattr(e, "doc", None)
+        if isinstance(body, str) and (not body.strip() or body.lstrip()[:1] == "<"):
+            return EngineError("blocked", "TikTok devolvio una respuesta vacia (posible limite temporal); "
+                                          "se pausa y se reintenta.")
     if name in ("JSONDecodeError", "FailedParseRoomIdError", "KeyError", "FailedFetchRoomInfoError"):
         return EngineError("flaky", f"TikTok devolvio una respuesta vacia o inesperada ({name}); se reintenta.")
     return EngineError("unknown", f"Fallo inesperado al consultar a TikTok ({name}). "
@@ -1695,9 +1731,13 @@ class Engine:
                     except Exception as e:
                         err = classify_exception(e)
                         err.__cause__ = e
-                        if err.kind in ("unknown", "network", "blocked", "flaky"):
+                        # Cerrar y reabrir el cliente en cada fallo multiplica los handshakes
+                        # (ttwid/msToken) justo cuando TikTok esta frenando: solo se descarta
+                        # si la conexion o el propio motor estan rotos.
+                        if err.kind in ("unknown", "network"):
                             await self._close_client(username)
-                        if attempt == 1 and err.kind == "flaky":
+                        if (attempt == 1 and err.kind == "flaky"
+                                and GATE.blocked_for() == 0):
                             await asyncio.sleep(1.5)   # respuesta vacia puntual: reintento inmediato
                             continue
                         raise err
@@ -1749,7 +1789,7 @@ class Engine:
         except Exception as e:
             first_err = classify_exception(e)
             first_err.__cause__ = e
-            if first_err.kind in ("unknown", "network", "blocked", "flaky"):
+            if first_err.kind in ("unknown", "network"):
                 await self._close_client(username)
         if not cands and (first_err is None or first_err.kind != "missing"):
             try:                                   # via alternativa: stream_data dentro de /user/room/
@@ -1868,6 +1908,12 @@ class Manager:
         self._totals: dict[int, dict] = {}
         self._totals_at = 0.0
         self._finalizing: set[int] = set()
+        # fallos seguidos de TikTok (vacio/429) sumados entre todos los usuarios: si varios
+        # fallan a la vez no es cosa de uno, es que TikTok esta frenando las consultas
+        self._strikes = 0
+        self._strike_at = 0.0
+        self._block_level = 0
+        self._last_ok = 0.0
 
     @property
     def global_block_until(self) -> float:
@@ -2041,11 +2087,42 @@ class Manager:
         t.add_done_callback(_done)
         return t
 
+    def _net_ok(self) -> None:
+        """Una consulta volvio a funcionar: se reinicia el contador de fallos globales."""
+        now = time.time()
+        self._strikes = 0
+        self._last_ok = now
+        if GATE.blocked_for() == 0 and now - self._strike_at > 600:
+            self._block_level = 0
+
+    def _net_fail(self, kind: str) -> None:
+        """Suma un fallo de TikTok y, si se repite entre usuarios, pausa todas las consultas.
+
+        Antes cada usuario reintentaba cada ~20 s por su cuenta y el bloqueo de TikTok podia
+        durar horas; la pausa global deja respirar a la API y se recupera antes.
+        """
+        now = time.time()
+        if now - self._strike_at > 120:
+            self._strikes = 0
+        self._strikes += 1
+        self._strike_at = now
+        if GATE.blocked_for() > 0:
+            return                                  # ya hay una pausa en curso
+        escalar = kind == "blocked" or self._strikes >= 3
+        if not escalar:
+            return
+        self._block_level = min(5, self._block_level + 1)
+        wait = min(900.0, 60.0 * 2 ** (self._block_level - 1))
+        self.global_block_until = now + wait
+        log.warning("TikTok no responde (%s, %d fallos seguidos): pausa global de %d s",
+                    kind, self._strikes, int(wait))
+
     async def _check(self, u: UserState) -> None:
         interval = self.s.int("check_interval", 15, 3600)
         delay: float = interval
         try:
             s = await asyncio.wait_for(self.engine.status(u.username), 45)
+            self._net_ok()
             now = time.time()
             u.fail, u.error, u.error_kind, u.last_err_sig = 0, None, None, ""
             u.last_check = now
@@ -2085,29 +2162,47 @@ class Manager:
                 delay = interval if u.recording else min(interval, 25)
         except Exception as e:
             err = classify_exception(e)
-            if err.kind == "age" and self.s.get("session_id").strip() and self.session_state != "expired":
-                self.session_due = 0.0          # un +18 fallo con sessionid puesta: comprobar si vencio
-            u.fail += 1
-            u.last_check = time.time()
-            self._log_failure(u, err, e)
-            if err.kind == "flaky" and u.fail < 3:
-                pass                                  # fallo puntual: no se muestra como problema
+            if err.paused:
+                # No se llego a consultar: hay una pausa global. No es un fallo de este usuario.
+                u.fail = 0
+                if u.error_kind in (None, "flaky", "blocked"):
+                    u.error, u.error_kind = None, None
+                delay = max(5.0, GATE.blocked_for() + random.uniform(1, 5))
             else:
-                u.error, u.error_kind = err.args[0], err.kind
-                u.live = None if err.kind != "not_found" else False
-            if err.kind == "flaky":
-                delay = min(interval, 20)
-            elif err.kind == "not_found":
-                delay = max(interval * 4, 300)
-            elif err.kind == "blocked":
-                delay = min(600, interval * 2 ** min(u.fail, 4))
-                self.global_block_until = max(self.global_block_until, time.time() + random.uniform(20, 45))
-            elif err.kind == "network":
-                delay = min(interval, 30)      # sin internet: volver a probar pronto (p. ej. al encender el PC)
-            elif err.kind in ("missing", "age"):
-                delay = max(interval * 4, 120)
-            else:
-                delay = min(300, interval * 2 ** min(u.fail, 3))
+                if err.kind == "age" and self.s.get("session_id").strip() and self.session_state != "expired":
+                    self.session_due = 0.0      # un +18 fallo con sessionid puesta: comprobar si vencio
+                u.fail += 1
+                u.last_check = time.time()
+                self._log_failure(u, err, e)
+                if err.kind in ("flaky", "blocked"):
+                    self._net_fail(err.kind)
+                if err.kind == "flaky" and u.fail in (3, 8) and GATE.blocked_for() == 0:
+                    await self.engine.drop(u.username)   # el cliente pudo quedar en mal estado
+                global_pause = GATE.blocked_for() > 0
+                if global_pause and err.kind in ("flaky", "blocked"):
+                    # Es TikTok frenando a todos, no un usuario roto: banner global y sin
+                    # llenar de errores las 11 filas del panel.
+                    if u.error_kind in (None, "flaky", "blocked"):
+                        u.error, u.error_kind = None, None
+                elif err.kind == "flaky" and u.fail < 5:
+                    pass                              # fallo puntual: no se muestra como problema
+                else:
+                    u.error, u.error_kind = err.args[0], err.kind
+                    u.live = None if err.kind != "not_found" else False
+                if global_pause:
+                    delay = max(5.0, GATE.blocked_for() + random.uniform(1, 5))
+                elif err.kind == "flaky":
+                    delay = min(300.0, 20.0 * 2 ** min(u.fail - 1, 4))
+                elif err.kind == "not_found":
+                    delay = max(interval * 4, 300)
+                elif err.kind == "blocked":
+                    delay = min(600, interval * 2 ** min(u.fail, 4))
+                elif err.kind == "network":
+                    delay = min(interval, 30)      # sin internet: volver a probar pronto (p. ej. al encender el PC)
+                elif err.kind in ("missing", "age"):
+                    delay = max(interval * 4, 120)
+                else:
+                    delay = min(300, interval * 2 ** min(u.fail, 3))
         finally:
             u.checking = False
             u.force = False
@@ -2181,8 +2276,10 @@ class Manager:
         if sig != u.last_err_sig or u.fail % 20 == 0:
             u.last_err_sig = sig
             tb = "".join(traceback.format_exception(type(raw), raw, raw.__traceback__)) if raw is not err else ""
+            doc = getattr(raw, "doc", "")       # cuerpo que TikTok devolvio cuando el JSON no se pudo leer
+            extra = f" | respuesta: {doc.strip()[:200]}" if isinstance(doc, str) and doc.strip() else ""
             log.warning("[%s] Fallo al consultar (%s, intento %d): %s\n%s",
-                        u.username, err.kind, u.fail, err.args[0], redact(tb))
+                        u.username, err.kind, u.fail, err.args[0], redact(tb + extra))
 
     def _mark_notified(self, u: UserState, room_id: str) -> None:
         """Guarda de que directo se avisó: evita repetir el aviso tras reiniciar el programa."""
@@ -2231,6 +2328,8 @@ class Manager:
 
     async def _record(self, u: UserState) -> None:
         fails = 0
+        rec_err: Optional[str] = None       # error de ESTA grabacion (u.error lo comparte el monitor)
+        recorded_any = False
         # un directo = una sesion; si se corta y vuelve, los trozos comparten session_id
         if (not u.session_id or u.session_room != u.room_id
                 or u.session_reported == u.session_id):
@@ -2251,11 +2350,15 @@ class Manager:
                     if info.title:
                         u.title = info.title
                 except Exception as e:
-                    fails += 1
                     err = classify_exception(e)
+                    if err.paused:            # pausa global: no se cuenta como fallo de la grabacion
+                        await self._sleep(u, min(60, GATE.blocked_for() + 2))
+                        continue
+                    fails += 1
                     self._log_failure(u, err, e)
                     if err.kind in ("not_found", "age", "missing") or fails >= 6:
                         u.error, u.error_kind = err.args[0], err.kind
+                        rec_err = err.args[0]
                         break
                     await self._sleep(u, min(60, 6 * fails))
                     st = await self._safe_status(u)
@@ -2274,6 +2377,7 @@ class Manager:
                     secs = await self._run_ffmpeg(u, cand)
                     if secs >= 15 or u.stop_req:
                         ok = True
+                        recorded_any = recorded_any or secs >= 15
                         break
                 if u.stop_req or self.stopping:
                     break
@@ -2288,6 +2392,7 @@ class Manager:
                     log.warning("[%s] Ninguna URL de stream pudo grabarse (intento %d/6).", u.username, fails)
                     if fails >= 6:
                         u.error, u.error_kind = "No se pudo grabar el stream tras varios intentos.", "no_stream"
+                        rec_err = u.error
                         break
                     await self._sleep(u, min(60, 8 * fails))
                     continue
@@ -2298,13 +2403,19 @@ class Manager:
         except Exception:
             log.error("[%s] Error inesperado en la grabacion\n%s", u.username, redact(traceback.format_exc()))
             u.error, u.error_kind = "Error interno al grabar (ver log).", "unknown"
+            rec_err = u.error
         finally:
-            if u.error and not u.stop_req and not self.stopping and not u.notified_err:
+            # Solo se avisa de un fallo de ESTA grabacion: u.error tambien lo escribe el monitor
+            # de estado y antes una consulta fallida al terminar el directo parecia "no se pudo grabar".
+            problem = rec_err or (u.error if not recorded_any else None)
+            if problem and not u.stop_req and not self.stopping and not u.notified_err:
                 u.notified_err = True
-                self.notify("⚠ No se pudo grabar", f"{self.who(u)} está en vivo pero: {u.error}", "problem", u.username)
+                self.notify("⚠ No se pudo grabar", f"{self.who(u)} está en vivo pero: {problem}", "problem", u.username)
             ended = (u.live is False and not u.stop_req and not self.stopping
                      and bool(u.session_id) and bool(u.session_rec_ids))
             if ended:
+                if not rec_err:
+                    u.error, u.error_kind = None, None     # grabo bien: no arrastrar el fallo del monitor
                 self._spawn(self._session_report(u, u.session_id, list(u.session_rec_ids), u.session_peak))
             u.recording = False
             u.proc = None
@@ -2609,10 +2720,20 @@ class Manager:
                               (*analysis_fields(h), rec_id))
                     fz = ", ".join(f"{fmt_secs(a)}-{fmt_secs(b)}" for a, b in h["freezes"][:8])
                     log.info("Analisis de %s: codec=%s %s fps=%s fotogramas=%s congelado=%s (%.0f s en %d tramos: %s) "
-                             "tiempos: retrocesos=%d hueco_max=%.1fs desfase_av=%.2f->%.2fs (calidad %s)",
+                             "tiempos: retrocesos=%d hueco_max=%.1fs desfase_av=%.2f->%.2fs video=%s audio=%s (calidad %s)",
                              final.name, h["codec"], h["size"], h["fps"], h["frames"], h["frozen"], h["frozen_secs"],
-                             len(h["freezes"]), fz or "-", h["ts_backwards"], h["ts_maxgap"], h["av_start"], h["av_end"], quality)
-                    if h["ts_bad"] and not h["frozen"] and h["frames"]:
+                             len(h["freezes"]), fz or "-", h["ts_backwards"], h["ts_maxgap"], h["av_start"], h["av_end"],
+                             fmt_secs(h["video_end"]), fmt_secs(h["audio_end"]), quality)
+                    tail = float(h.get("tail_secs") or 0)
+                    if tail > 3 and h["frames"] and not h["frozen"]:
+                        # El video se acabo antes que el audio: no hay "hueco" ni congelacion, simplemente
+                        # TikTok dejo de enviar imagen. La copia reparada recorta ese final sin imagen.
+                        health = (f"⚠ Los últimos {fmt_secs(tail)} no tienen imagen: TikTok dejó de enviar video. "
+                                  "El audio está completo. Usa 🛠 en «Directos» para crear una copia sincronizada "
+                                  "(recorta el final sin imagen)")
+                        self.db.x("UPDATE recordings SET note=? WHERE id=?",
+                                  ((note + " · " if note else "") + "⚠ Sin imagen al final (usa 🛠)", rec_id))
+                    elif h["ts_bad"] and not h["frozen"] and h["frames"]:
                         health = (f"⚠ Tiempos del video irregulares (hueco {h['ts_maxgap']:.0f} s): puede verse congelado en el "
                                   "reproductor. Usa 🛠 en «Directos» para crear una copia reparada")
                         self.db.x("UPDATE recordings SET note=? WHERE id=?", ((note + " · " if note else "") + "⚠ Tiempos irregulares (usa 🛠)", rec_id))
@@ -5499,17 +5620,22 @@ def make_handler(app: App):
                         job.message = "Analizando el video..."
                         h = analyze_video(exe, src, dur)
                         dst = src.with_name(src.stem + "_reparado.mp4")
-                        job.message = "Reparando (recodificando)..."
+                        tail = float(h.get("tail_secs") or 0)
+                        job.message = ("Recortando el final sin imagen..." if tail > 3
+                                       else "Reparando (recodificando)...")
                         if not repair_video(exe, src, dst, h["frames"] or 0, dur,
-                                            progress=lambda f, secs: setattr(job, "progress", f)):
+                                            progress=lambda f, secs: setattr(job, "progress", f),
+                                            video_secs=float(h.get("video_span") or 0), tail_secs=tail):
                             raise RuntimeError("No se pudo reparar (ver Diagnostico).")
                         new_dur = probe_duration(exe, dst) or dur
+                        note = (f"Recortado: sin imagen los últimos {fmt_secs(tail)} (a partir de #{rec_id})"
+                                if tail > 3 else f"Reparado a partir de #{rec_id}")
                         new_id = app.db.x(
                             "INSERT INTO recordings(user_id,path,started_at,ended_at,duration_sec,size_bytes,status,quality,note) "
                             "VALUES(?,?,?,?,?,?,?,?,?)",
                             (rec["user_id"], str(dst), rec["started_at"],
                              datetime.now().isoformat(timespec="seconds"), new_dur, dst.stat().st_size,
-                             "done", rec["quality"], f"Reparado a partir de #{rec_id}"))
+                             "done", rec["quality"], note))
                         make_thumb(exe, dst, new_dur, THUMB_DIR / f"{new_id}.jpg")
                         mgr._totals_at = 0.0
                         job.result = {"id": new_id}

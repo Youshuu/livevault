@@ -147,7 +147,7 @@ pre{background:#0b0d11;border:1px solid var(--line);border-radius:10px;padding:1
           stroke-width="19" stroke-linejoin="round"/>
   </svg>
   <h1>Live<span>Vault</span></h1>
-  <span id="chipVer" class="chip" title="Versión de LiveVault">v1.8.2</span>
+  <span id="chipVer" class="chip" title="Versión de LiveVault">v1.8.3</span>
   <span id="chipEngine" class="chip">motor…</span>
   <span id="chipFfmpeg" class="chip">ffmpeg…</span>
   <span id="chipDisk" class="chip" style="display:none">disco…</span>
@@ -597,7 +597,7 @@ function recRow(x, nested) {
       ${x.exists && x.status === 'recording' ? `<a class="btn small" href="${withToken('/files/' + x.id)}" target="_blank" title="Ver mientras se graba (empieza desde el principio; recarga para seguir)">👁 Ver</a>` : ''}
       ${x.exists && x.status !== 'recording' ? `<a class="btn small" href="${withToken('/files/' + x.id)}" target="_blank" title="Reproducir">▶</a> <a class="btn small" href="${withToken('/files/' + x.id + '?dl=1')}" title="Descargar">⬇</a>` : (x.exists ? '' : '<span style="color:var(--muted);font-size:12px">archivo no encontrado</span>')}
       ${x.exists && x.status !== 'recording' ? `<button class="btn small" data-an="${x.id}" title="Analizar el video (detecta tramos congelados)">🔍</button>` : ''}
-      ${x.exists && x.status === 'done' ? `<button class="btn small" data-fix="${x.id}" title="Crear una copia reparada (regenera las marcas de tiempo)">🛠</button>` : ''}
+      ${x.exists && x.status === 'done' ? `<button class="btn small" data-fix="${x.id}" title="Crear una copia sincronizada (recorta el final sin imagen o regenera las marcas de tiempo)">🛠</button>` : ''}
       ${x.status !== 'recording' ? `<button class="btn small danger" data-del="${x.id}" title="Borrar">🗑</button>` : ''}</td></tr>`;
 }
 
@@ -664,7 +664,7 @@ $('#dRows').addEventListener('click', async ev => {
   }
   const fx = ev.target.closest('[data-fix]');
   if (fx) {
-    if (!confirm('Se creará una COPIA reparada (el original no se toca). Recodifica el video, así que puede tardar varios minutos en directos largos y usa CPU.\n\nNo cierres el programa hasta que termine. ¿Continuar?')) return;
+    if (!confirm('Se creará una COPIA sincronizada (el original no se toca).\n\nSi el video se cortó antes que el audio, solo recorta el final sin imagen: es rápido. Si las marcas de tiempo están mal, recodifica y puede tardar varios minutos en directos largos (usa CPU).\n\nNo cierres el programa hasta que termine. ¿Continuar?')) return;
     try {
       const r = await api('/api/recordings/' + fx.dataset.fix + '/repair', 'POST');
       showJob(r.job);

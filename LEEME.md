@@ -1,9 +1,19 @@
-# LiveVault 1.8.2
+# LiveVault 1.8.3
 
 Vigila usuarios de TikTok y graba sus lives automáticamente (varios a la vez).
 Vive en la bandeja del sistema, te avisa cuando alguien entra en vivo y puede iniciar solo al encender el PC.
 
 Descarga: **[última versión](../../releases/latest)** · Novedades: [CHANGELOG.md](CHANGELOG.md)
+
+### Novedades de la 1.8.3
+
+- **Si TikTok frena las consultas, el programa espera**: una respuesta vacía o una página de
+  verificación ya no se confunde con un fallo de cada usuario. Se pausan todas las consultas unos
+  minutos (cada vez más) y el panel muestra un solo aviso, no 11 usuarios en rojo.
+- **Grabaciones con el video cortado antes que el audio**: el aviso dice cuánto metraje se quedó sin
+  imagen. **🛠** recorta ese final en segundos y sin recodificar, en vez de tardar y dejar el video
+  desincronizado.
+- Después de una grabación correcta ya no aparece «⚠ No se pudo grabar» por un fallo del monitor.
 
 ### Novedades de la 1.8.2
 
